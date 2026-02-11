@@ -25,6 +25,10 @@ build
 .DS_Store
 Thumbs.db
 
+# Other package manager lockfiles
+bun.lockb
+package-lock.json
+
 # Logs
 *.log
 npm-debug.log*

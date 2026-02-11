@@ -23,6 +23,7 @@
         "@jeniferai/types": "workspace:*",
         "@jeniferai/ui": "workspace:*",
         "@jeniferai/utils": "workspace:*",
+        "@react-aria/i18n": "^3.12.15",
         "@react-aria/utils": "^3.31.0",
         "@react-stately/utils": "^3.10.8",
         "@supabase/ssr": "^0.5.2",
