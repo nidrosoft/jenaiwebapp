@@ -239,7 +239,7 @@ export function EditMeetingSlideout({
                 </Button>
                 <Button 
                   size="md" 
-                  color="error" 
+                  color="primary-destructive" 
                   onClick={handleDelete}
                   disabled={isDeleting}
                 >
@@ -259,7 +259,7 @@ export function EditMeetingSlideout({
                   name="title"
                   size="sm"
                   value={formData.title}
-                  onChange={(e) => handleInputChange("title", e.target.value)}
+                  onChange={(value) => handleInputChange("title", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                   placeholder="e.g., Team Standup, Client Call"
                   isRequired
                 />
@@ -275,7 +275,7 @@ export function EditMeetingSlideout({
                   name="status"
                   options={statusOptions}
                   value={formData.status}
-                  onChange={(e) => handleInputChange("status", e.target.value)}
+                  onChange={(value) => handleInputChange("status", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                 />
               </div>
 
@@ -289,7 +289,7 @@ export function EditMeetingSlideout({
                   name="meetingType"
                   options={meetingTypes}
                   value={formData.meetingType}
-                  onChange={(e) => handleInputChange("meetingType", e.target.value)}
+                  onChange={(value) => handleInputChange("meetingType", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                 />
               </div>
 
@@ -315,7 +315,7 @@ export function EditMeetingSlideout({
                     type="time" 
                     size="sm" 
                     value={formData.startTime}
-                    onChange={(e) => handleInputChange("startTime", e.target.value)}
+                    onChange={(value) => handleInputChange("startTime", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -328,7 +328,7 @@ export function EditMeetingSlideout({
                     type="time" 
                     size="sm" 
                     value={formData.endTime}
-                    onChange={(e) => handleInputChange("endTime", e.target.value)}
+                    onChange={(value) => handleInputChange("endTime", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                   />
                 </div>
               </div>
@@ -343,7 +343,7 @@ export function EditMeetingSlideout({
                   name="locationType"
                   options={locationTypes}
                   value={formData.locationType}
-                  onChange={(e) => handleInputChange("locationType", e.target.value)}
+                  onChange={(value) => handleInputChange("locationType", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                 />
               </div>
 
@@ -359,7 +359,7 @@ export function EditMeetingSlideout({
                     size="sm"
                     icon={MarkerPin01}
                     value={formData.location}
-                    onChange={(e) => handleInputChange("location", e.target.value)}
+                    onChange={(value) => handleInputChange("location", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                     placeholder="Add a location"
                   />
                 </div>
@@ -377,7 +377,7 @@ export function EditMeetingSlideout({
                     size="sm"
                     icon={VideoRecorder}
                     value={formData.videoLink}
-                    onChange={(e) => handleInputChange("videoLink", e.target.value)}
+                    onChange={(value) => handleInputChange("videoLink", typeof value === 'string' ? value : (value as any)?.target?.value ?? value)}
                     placeholder="Add Zoom, Teams, or Meet link"
                   />
                 </div>
@@ -439,7 +439,7 @@ export function EditMeetingSlideout({
           <SlideoutMenu.Footer className="flex w-full items-center justify-between gap-3">
             <Button 
               size="md" 
-              color="error" 
+              color="primary-destructive" 
               iconLeading={Trash01}
               onClick={() => setShowDeleteConfirm(true)}
             >

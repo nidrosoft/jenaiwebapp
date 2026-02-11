@@ -20,7 +20,6 @@ import { TabList, Tabs } from "@/components/application/tabs/tabs";
 import { Table, TableCard, TableRowActionsDropdown } from "@/components/application/table/table";
 import { PaginationPageMinimalCenter } from "@/components/application/pagination/pagination";
 import {
-  contacts as initialContacts,
   categoryColors,
   categoryLabels,
   getInitials,

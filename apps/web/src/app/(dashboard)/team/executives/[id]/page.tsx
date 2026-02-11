@@ -43,15 +43,13 @@ import { useExecutives, type DatabaseExecutive } from "@/hooks/useExecutives";
 
 // Convert database executive to UI format
 const convertToUIExecutive = (dbExec: DatabaseExecutive): Executive => {
-  const primaryPhone = dbExec.phones?.find(p => p.is_primary) || dbExec.phones?.[0];
-  
   return {
     id: dbExec.id,
     name: dbExec.full_name,
     title: dbExec.title || '',
     email: dbExec.email || '',
-    phone: primaryPhone?.number || '',
-    location: dbExec.main_office_location || '',
+    phone: dbExec.phone || '',
+    location: dbExec.office_location || '',
     timezone: dbExec.timezone || 'America/Los_Angeles',
     department: 'Executive',
     bio: dbExec.bio || undefined,
