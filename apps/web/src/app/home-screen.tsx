@@ -16,10 +16,10 @@ export const HomeScreen = () => {
                     <UntitledLogoMinimal className="size-10" />
                 </div>
 
-                <h1 className="max-w-3xl text-center text-display-sm font-semibold text-primary">Untitled UI Next.js starter kit</h1>
+                <h1 className="max-w-3xl text-center text-display-sm font-semibold text-primary">JeniferAI</h1>
 
                 <p className="mt-2 max-w-xl text-center text-lg text-tertiary">
-                    Get started by using existing components that came with this starter kit or add new ones:
+                    The AI-powered command center for Executive Assistants, Chiefs of Staff, and Executives.
                 </p>
 
                 <div className="relative mt-6 flex h-10 items-center rounded-lg border border-secondary bg-secondary">

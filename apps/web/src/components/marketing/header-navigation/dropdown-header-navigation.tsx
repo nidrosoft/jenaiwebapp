@@ -10,7 +10,7 @@ const items = [
     },
     {
         title: "Customer stories",
-        subtitle: "Learn how our customers are using Untitled UI to 10x their growth.",
+        subtitle: "Learn how our customers are using JeniferAI to 10x their productivity.",
         href: "/customer-stories",
         Icon: Stars02,
     },
