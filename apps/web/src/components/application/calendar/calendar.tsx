@@ -564,10 +564,11 @@ interface MobileSingleDayGridProps {
     currentTime: ZonedDateTime; // For time marker
     setSelectedDate: (date: CalendarDate | null) => void;
     timeFormatter: DateFormatter;
+    onEventClick?: (event: ZonedEvent) => void;
     className?: string;
 }
 
-const MobileSingleDayGrid = ({ dayToDisplay, dayEvents, timeZone, setSelectedDate, timeFormatter, className }: MobileSingleDayGridProps) => {
+const MobileSingleDayGrid = ({ dayToDisplay, dayEvents, timeZone, setSelectedDate, timeFormatter, onEventClick, className }: MobileSingleDayGridProps) => {
     const dayStart = useMemo(() => getStartOfDay(dayToDisplay, timeZone), [dayToDisplay, timeZone]); // Calculate once
 
     return (
@@ -594,6 +595,7 @@ const MobileSingleDayGrid = ({ dayToDisplay, dayEvents, timeZone, setSelectedDat
                         totalOverlapping={totalOverlapping}
                         setSelectedDate={setSelectedDate}
                         timeFormatter={timeFormatter}
+                        onEventClick={onEventClick}
                     />
                 );
             })}
@@ -609,9 +611,10 @@ interface WeekViewDayProps {
     slotHeight: number;
     setSelectedDate: (date: CalendarDate | null) => void;
     timeFormatter: DateFormatter;
+    onEventClick?: (event: ZonedEvent) => void;
 }
 
-const WeekViewDay = ({ day, isLastDay, visibleEvents, timeZone, slotHeight, setSelectedDate, timeFormatter }: WeekViewDayProps) => {
+const WeekViewDay = ({ day, isLastDay, visibleEvents, timeZone, slotHeight, setSelectedDate, timeFormatter, onEventClick }: WeekViewDayProps) => {
     const dateKey = day.toString();
     const dayEvents = useMemo(() => getEventsForDay(visibleEvents, day, timeZone), [visibleEvents, day, timeZone]);
     const dayStart = useMemo(() => getStartOfDay(day, timeZone), [day, timeZone]);
@@ -638,6 +641,7 @@ const WeekViewDay = ({ day, isLastDay, visibleEvents, timeZone, slotHeight, setS
                             totalOverlapping={totalOverlapping}
                             setSelectedDate={setSelectedDate}
                             timeFormatter={timeFormatter}
+                            onEventClick={onEventClick}
                         />
                     );
                 })}
@@ -657,6 +661,7 @@ interface WeekViewProps {
     shortWeekdayFormatter: DateFormatter;
     timeFormatter: DateFormatter;
     hourOnlyFormatter: DateFormatter;
+    onEventClick?: (event: ZonedEvent) => void;
     className?: string;
     view?: string;
 }
@@ -672,6 +677,7 @@ const WeekView = ({
     shortWeekdayFormatter,
     timeFormatter,
     hourOnlyFormatter,
+    onEventClick,
     className,
     view,
 }: WeekViewProps) => {
@@ -786,6 +792,7 @@ const WeekView = ({
                                 slotHeight={SLOT_HEIGHT}
                                 setSelectedDate={setSelectedDate}
                                 timeFormatter={timeFormatter}
+                                onEventClick={onEventClick}
                             />
                         );
                     })}
@@ -809,6 +816,8 @@ interface DayViewProps {
     shortWeekdayFormatter: DateFormatter;
     timeFormatter: DateFormatter;
     hourOnlyFormatter: DateFormatter;
+    fullDateFormatter: DateFormatter;
+    onEventClick?: (event: ZonedEvent) => void;
     className?: string;
     view?: string;
 }
@@ -823,6 +832,8 @@ const DayView = ({
     shortWeekdayFormatter,
     timeFormatter,
     hourOnlyFormatter,
+    fullDateFormatter,
+    onEventClick,
     selectedDate,
     className,
     view,
@@ -867,6 +878,12 @@ const DayView = ({
     }
 
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [selectedEvent, setSelectedEvent] = useState<ZonedEvent | null>(null);
+
+    const handleDayEventClick = useCallback((event: ZonedEvent) => {
+        setSelectedEvent(event);
+        if (onEventClick) onEventClick(event);
+    }, [onEventClick]);
 
     // Calculate earliest event time or default to 8 AM
     const earliestEventTime = useMemo(() => {
@@ -939,6 +956,7 @@ const DayView = ({
                         currentTime={currentTime}
                         setSelectedDate={setSelectedDate}
                         timeFormatter={timeFormatter}
+                        onEventClick={handleDayEventClick}
                     />
                     {showTimeMarker && <CalendarTimeMarker style={{ top: `${timeMarkerTop}px` }}>{formatTime(localCurrentTime)}</CalendarTimeMarker>}
                 </div>
@@ -966,92 +984,50 @@ const DayView = ({
                     </AriaCalendar>
 
                     <div className="flex flex-col gap-5 border-t border-secondary px-6 py-5">
-                        <div className="flex flex-col gap-2">
-                            <section className="flex w-full justify-between">
-                                <p className="text-md font-semibold text-primary">Product demo</p>
-                                <div className="-mt-2 -mr-2 flex gap-0.5">
-                                    <ButtonUtility size="xs" color="tertiary" tooltip="Copy link" icon={Copy01} />
-                                    <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} />
-                                    <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} />
+                        {selectedEvent ? (
+                            <>
+                                <div className="flex flex-col gap-2">
+                                    <section className="flex w-full justify-between">
+                                        <p className="text-md font-semibold text-primary">{selectedEvent.title}</p>
+                                        <div className="-mt-2 -mr-2 flex gap-0.5">
+                                            <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} />
+                                        </div>
+                                    </section>
+                                    <section className="flex flex-col gap-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <CalendarIcon className="size-4 text-fg-quaternary" />
+                                            <p className="text-sm text-tertiary">
+                                                {fullDateFormatter.format(selectedEvent.start.toDate())}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <Clock className="size-4 text-fg-quaternary" />
+                                            <p className="text-sm text-tertiary">
+                                                {timeFormatter.format(selectedEvent.start.toDate())} - {timeFormatter.format(selectedEvent.end.toDate())}
+                                            </p>
+                                        </div>
+                                        {selectedEvent.location && (
+                                            <div className="flex items-center gap-1.5">
+                                                <BellRinging01 className="size-4 text-fg-quaternary" />
+                                                <p className="text-sm text-tertiary">{selectedEvent.location}</p>
+                                            </div>
+                                        )}
+                                    </section>
                                 </div>
-                            </section>
-                            <section className="flex flex-col gap-1.5">
-                                <div className="flex items-center gap-1.5">
-                                    <CalendarIcon className="size-4 text-fg-quaternary" />
-                                    <p className="text-sm text-tertiary">Friday, Jan 10, 2025</p>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <Clock className="size-4 text-fg-quaternary" />
-                                    <p className="text-sm text-tertiary">1:30 PM - 3:30 PM</p>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <BellRinging01 className="size-4 text-fg-quaternary" />
-                                    <p className="text-sm text-tertiary">10 min before</p>
-                                </div>
-                            </section>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <section className="flex gap-2">
-                                <section className="flex flex-row -space-x-2">
-                                    <Avatar
-                                        className="ring-[1.5px] ring-bg-primary"
-                                        src="https://www.untitledui.com/images/avatars/sienna-hewitt?fm=webp&q=80"
-                                        alt="Sienna Hewitt"
-                                        size="sm"
-                                    />
-                                    <Avatar
-                                        className="ring-[1.5px] ring-bg-primary"
-                                        src="https://www.untitledui.com/images/avatars/ammar-foley?fm=webp&q=80"
-                                        alt="Ammar Foley"
-                                        size="sm"
-                                    />
-                                    <Avatar
-                                        className="ring-[1.5px] ring-bg-primary"
-                                        src="https://www.untitledui.com/images/avatars/pippa-wilkinson?fm=webp&q=80"
-                                        alt="Pippa Wilkinson"
-                                        size="sm"
-                                    />
-                                    <Avatar
-                                        className="ring-[1.5px] ring-bg-primary"
-                                        src="https://www.untitledui.com/images/avatars/olly-schroeder?fm=webp&q=80"
-                                        alt="Olly Schroeder"
-                                        size="sm"
-                                    />
-                                    <Avatar
-                                        className="ring-[1.5px] ring-bg-primary"
-                                        src="https://www.untitledui.com/images/avatars/mathilde-lewis?fm=webp&q=80"
-                                        alt="Mathilde Lewis"
-                                        size="sm"
-                                    />
-                                    <Avatar className="ring-[1.5px] ring-bg-primary" initials="OR" size="sm" />
-                                </section>
-                                <AvatarAddButton size="sm" />
-                            </section>
-
-                            <section className="flex items-center gap-2">
-                                <p className="text-sm font-semibold text-primary">6 guests</p>
-                                <span className="h-[13px] border-l border-primary" />
-                                <p className="text-sm text-tertiary">5 yes</p>
-                                <span className="h-[13px] border-l border-primary" />
-                                <p className="text-sm text-tertiary">1 awaiting</p>
-                            </section>
-                        </div>
-
-                        <section className="flex flex-col gap-2">
-                            <p className="text-sm font-semibold text-primary">About this event</p>
-                            <div className="text-sm text-tertiary">
-                                <p>Sienna is inviting you to a scheduled Zoom meeting.</p>
-                                <br />
-                                <p>Topic: Product demo for the new dashboard and Q&A session.</p>
-                                <br />
-                                <p className="break-words whitespace-normal">
-                                    Join Zoom Meeting:&nbsp;
-                                    <span className="break-all underline">https://us02web.zoom.us/j/86341969512</span>&nbsp;
-                                </p>
-                                <br />
-                                <p>Meeting ID: 863 4196 9512</p>
+                                {selectedEvent.description && (
+                                    <section className="flex flex-col gap-2">
+                                        <p className="text-sm font-semibold text-primary">About this event</p>
+                                        <p className="text-sm text-tertiary">{selectedEvent.description}</p>
+                                    </section>
+                                )}
+                            </>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                <CalendarIcon className="size-10 text-fg-quaternary mb-2" />
+                                <p className="text-sm font-medium text-primary">No event selected</p>
+                                <p className="text-xs text-tertiary mt-1">Click on an event to see its details</p>
                             </div>
-                        </section>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1094,6 +1070,12 @@ export const Calendar = ({ events, view: defaultView = "month", className, onEve
             end: parseAbsoluteToLocal(event.end.toISOString()),
         }));
     }, [events]);
+
+    const handleZonedEventClick = useCallback((zonedEvent: ZonedEvent) => {
+        if (!onEventClick) return;
+        const originalEvent = events.find(e => e.id === zonedEvent.id);
+        if (originalEvent) onEventClick(originalEvent);
+    }, [events, onEventClick]);
 
     const headerDate = useMemo(
         () => (view === "day" && selectedDate ? selectedDate.toDate(timeZone) : currentMonthDate.toDate(timeZone)),
@@ -1179,6 +1161,8 @@ export const Calendar = ({ events, view: defaultView = "month", className, onEve
                             shortWeekdayFormatter={shortWeekdayFormatter}
                             timeFormatter={timeFormatter}
                             hourOnlyFormatter={hourOnlyFormatter}
+                            fullDateFormatter={fullDateFormatter}
+                            onEventClick={handleZonedEventClick}
                             view={view}
                             className="md:hidden"
                         />
@@ -1194,6 +1178,7 @@ export const Calendar = ({ events, view: defaultView = "month", className, onEve
                             shortWeekdayFormatter={shortWeekdayFormatter}
                             timeFormatter={timeFormatter}
                             hourOnlyFormatter={hourOnlyFormatter}
+                            onEventClick={handleZonedEventClick}
                             view={view}
                             className="max-md:hidden"
                         />
@@ -1211,6 +1196,8 @@ export const Calendar = ({ events, view: defaultView = "month", className, onEve
                         shortWeekdayFormatter={shortWeekdayFormatter}
                         timeFormatter={timeFormatter}
                         hourOnlyFormatter={hourOnlyFormatter}
+                        fullDateFormatter={fullDateFormatter}
+                        onEventClick={handleZonedEventClick}
                         view={view}
                     />
                 )}

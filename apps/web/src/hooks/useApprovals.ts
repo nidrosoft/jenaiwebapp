@@ -40,8 +40,8 @@ export interface ApprovalFilters {
 export interface CreateApprovalData {
   title: string;
   description?: string;
-  approval_type: 'expense' | 'calendar' | 'document' | 'travel' | 'other';
-  urgency?: 'high' | 'medium' | 'low';
+  approval_type: 'expense' | 'calendar' | 'document' | 'travel' | 'purchase' | 'time_off' | 'other';
+  urgency?: 'high' | 'medium' | 'low' | 'urgent';
   amount?: number;
   currency?: string;
   category?: string;

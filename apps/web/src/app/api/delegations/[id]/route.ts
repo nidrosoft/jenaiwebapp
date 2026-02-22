@@ -74,7 +74,7 @@ async function handlePatch(
 
     const { data: existing } = await supabase
       .from('delegations')
-      .select('id, status, delegated_to')
+      .select('id, status, delegated_to, delegated_by')
       .eq('id', id)
       .eq('org_id', context.user.org_id)
       .single();
@@ -83,9 +83,9 @@ async function handlePatch(
       return notFoundResponse('Delegation');
     }
 
-    // Only the delegated_to user can update status
-    if (existing.delegated_to !== context.user.id) {
-      return badRequestResponse('Only the assigned user can update this delegation');
+    // Allow both the delegator and the delegatee to update status
+    if (existing.delegated_to !== context.user.id && existing.delegated_by !== context.user.id) {
+      return badRequestResponse('Only participants of this delegation can update it');
     }
 
     const updateData: Record<string, unknown> = {
@@ -121,10 +121,58 @@ async function handlePatch(
   }
 }
 
+async function handleDelete(
+  request: NextRequest,
+  context: AuthContext,
+  { params }: RouteParams
+) {
+  const { id } = await params;
+
+  try {
+    const supabase = await createClient();
+
+    const { data: existing } = await supabase
+      .from('delegations')
+      .select('id, delegated_by, delegated_to')
+      .eq('id', id)
+      .eq('org_id', context.user.org_id)
+      .single();
+
+    if (!existing) {
+      return notFoundResponse('Delegation');
+    }
+
+    // Allow both participants to delete
+    if (existing.delegated_to !== context.user.id && existing.delegated_by !== context.user.id) {
+      return badRequestResponse('Only participants of this delegation can delete it');
+    }
+
+    // Soft delete by setting deleted_at
+    const { error } = await supabase
+      .from('delegations')
+      .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting delegation:', error);
+      return internalErrorResponse(error.message);
+    }
+
+    return successResponse({ message: 'Delegation deleted' });
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return internalErrorResponse();
+  }
+}
+
 export async function GET(request: NextRequest, routeParams: RouteParams) {
   return withAuth((req, ctx) => handleGet(req, ctx, routeParams))(request);
 }
 
 export async function PATCH(request: NextRequest, routeParams: RouteParams) {
   return withAuth((req, ctx) => handlePatch(req, ctx, routeParams))(request);
+}
+
+export async function DELETE(request: NextRequest, routeParams: RouteParams) {
+  return withAuth((req, ctx) => handleDelete(req, ctx, routeParams))(request);
 }

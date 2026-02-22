@@ -2,14 +2,17 @@
 
 /**
  * AddTaskSlideout Component
- * Slideout panel for creating new tasks
+ * Slideout panel for creating/editing tasks
+ * P2-09: Enhanced with quick dates, dual assignment, dynamic categories, no status field on create
  */
 
-import { useState, useEffect } from "react";
-import { getLocalTimeZone, today } from "@internationalized/date";
+import { useState, useEffect, useCallback } from "react";
+import { getLocalTimeZone, today, CalendarDate } from "@internationalized/date";
 import type { DateValue } from "react-aria-components";
 import {
   Calendar,
+  Plus,
+  Trash01,
 } from "@untitledui/icons";
 import { DatePicker } from "@/components/application/date-picker/date-picker";
 import { SlideoutMenu } from "@/components/application/slideout-menus/slideout-menu";
@@ -17,19 +20,20 @@ import { Button } from "@/components/base/buttons/button";
 import { CloseButton } from "@/components/base/buttons/close-button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
-import { Toggle } from "@/components/base/toggle/toggle";
-import { type Task, type TaskStatus, type TaskPriority, categories } from "./task-types";
+import { type Task, type Subtask, type TaskStatus, type TaskPriority } from "./task-types";
 
 interface AddTaskSlideoutProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit?: (task: Omit<Task, "id" | "createdAt" | "completed">) => void;
+  editTask?: Task | null;
+  defaultStatus?: TaskStatus;
 }
 
 const priorityOptions = [
-  { label: "High", value: "high" },
+  { label: "High / Urgent", value: "high" },
   { label: "Medium", value: "medium" },
-  { label: "Low", value: "low" },
+  { label: "Low / Informative", value: "low" },
 ];
 
 const statusOptions = [
@@ -39,17 +43,40 @@ const statusOptions = [
   { label: "Done", value: "done" },
 ];
 
-const categoryOptions = categories
-  .filter((c) => c !== "All")
-  .map((c) => ({ label: c, value: c }));
+interface ReminderEntry {
+  id: string;
+  offset: string;
+  note: string;
+}
 
+let reminderCounter = 0;
 
-export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlideoutProps) {
-  const [hasReminder, setHasReminder] = useState(false);
+export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defaultStatus }: AddTaskSlideoutProps) {
   const [dueDate, setDueDate] = useState<DateValue | null>(null);
+  const [reminders, setReminders] = useState<ReminderEntry[]>([]);
+  const [subtasks, setSubtasks] = useState<Array<{ id: string; title: string }>>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [executiveOptions, setExecutiveOptions] = useState<{ label: string; value: string }[]>([]);
+  const [teamMemberOptions, setTeamMemberOptions] = useState<{ label: string; value: string }[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<{ label: string; value: string }[]>([]);
+  const isEditing = !!editTask;
 
+  // Initialize subtasks from editTask
   useEffect(() => {
+    if (isOpen && editTask?.subtasks) {
+      setSubtasks(editTask.subtasks.map(st => ({ id: st.id, title: st.title })));
+    } else if (isOpen && !editTask) {
+      setSubtasks([]);
+    }
+    if (isOpen) {
+      setNewSubtaskTitle("");
+    }
+  }, [isOpen, editTask]);
+
+  // Fetch executives, team members, and categories when slideout opens
+  useEffect(() => {
+    if (!isOpen) return;
+
     const fetchExecutives = async () => {
       try {
         const response = await fetch('/api/executives?page_size=100');
@@ -64,8 +91,81 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
         console.error('Failed to fetch executives:', err);
       }
     };
-    if (isOpen) fetchExecutives();
+
+    const fetchTeamMembers = async () => {
+      try {
+        const response = await fetch('/api/settings/team');
+        if (response.ok) {
+          const result = await response.json();
+          const list = result.data?.data ?? result.data ?? [];
+          setTeamMemberOptions(
+            Array.isArray(list) ? list.filter((m: any) => m.is_active !== false).map((m: any) => ({ label: m.full_name || m.email, value: m.full_name || m.email })) : []
+          );
+        }
+      } catch (err) {
+        console.error('Failed to fetch team members:', err);
+      }
+    };
+
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch('/api/tasks/categories');
+        if (response.ok) {
+          const result = await response.json();
+          const cats = result.data?.data ?? result.data ?? result;
+          if (Array.isArray(cats)) {
+            setCategoryOptions(cats.map((c: any) => ({ label: c.name, value: c.name })));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+      }
+    };
+
+    fetchExecutives();
+    fetchTeamMembers();
+    fetchCategories();
   }, [isOpen]);
+
+  // Reminder helpers
+  const addReminder = useCallback(() => {
+    reminderCounter++;
+    setReminders(prev => [...prev, { id: `r-${reminderCounter}`, offset: '1d', note: '' }]);
+  }, []);
+
+  const removeReminder = useCallback((id: string) => {
+    setReminders(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const updateReminder = useCallback((id: string, field: 'offset' | 'note', value: string) => {
+    setReminders(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  }, []);
+
+  // Subtask helpers
+  const addSubtask = useCallback(() => {
+    const trimmed = newSubtaskTitle.trim();
+    if (!trimmed) return;
+    setSubtasks(prev => [...prev, { id: `new-${Date.now()}-${prev.length}`, title: trimmed }]);
+    setNewSubtaskTitle("");
+  }, [newSubtaskTitle]);
+
+  const removeSubtask = useCallback((id: string) => {
+    setSubtasks(prev => prev.filter(st => st.id !== id));
+  }, []);
+
+  // Quick date helpers
+  const setToday = () => {
+    const t = today(getLocalTimeZone());
+    setDueDate(t);
+  };
+  const setTomorrow = () => {
+    const t = today(getLocalTimeZone()).add({ days: 1 });
+    setDueDate(t);
+  };
+  const setNextWeek = () => {
+    const t = today(getLocalTimeZone()).add({ weeks: 1 });
+    setDueDate(t);
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -75,17 +175,33 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
       title: formData.get("title") as string,
       description: formData.get("description") as string,
       priority: formData.get("priority") as TaskPriority,
-      status: formData.get("status") as TaskStatus,
+      status: isEditing ? (formData.get("status") as TaskStatus) : (defaultStatus || "todo"),
       category: formData.get("category") as string,
       dueDate: dueDate ? dueDate.toString() : "",
       executive: formData.get("executive") as string,
       comments: 0,
       attachments: 0,
+      subtasks: subtasks.map(st => ({
+        id: st.id,
+        title: st.title,
+        completed: editTask?.subtasks?.find(es => es.id === st.id)?.completed ?? false,
+        completed_at: editTask?.subtasks?.find(es => es.id === st.id)?.completed_at ?? null,
+      })),
     };
 
     onSubmit?.(task);
     onOpenChange(false);
   };
+
+  // Fallback category options if API returned nothing
+  const effectiveCategoryOptions = categoryOptions.length > 0
+    ? categoryOptions
+    : [
+        { label: "Personal", value: "Personal" },
+        { label: "Work", value: "Work" },
+        { label: "Travel", value: "Travel" },
+        { label: "Admin", value: "Admin" },
+      ];
 
   return (
     <SlideoutMenu.Trigger isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -93,8 +209,14 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
         {/* Header */}
         <div className="relative w-full border-b border-gray-200 px-4 py-4 dark:border-gray-800 md:px-6">
           <CloseButton className="absolute top-4 right-4" onClick={() => onOpenChange(false)} />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Add Task</h2>
-          <p className="text-sm text-gray-500">Create a new task for your team</p>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{isEditing ? "Edit Task" : "Add Task"}</h2>
+          <p className="text-sm text-gray-500">
+            {isEditing
+              ? "Update task details"
+              : defaultStatus && defaultStatus !== "todo"
+                ? `Create a new task in "${statusOptions.find(s => s.value === defaultStatus)?.label || defaultStatus}"`
+                : "Create a new task for your team"}
+          </p>
         </div>
 
         {/* Content */}
@@ -111,6 +233,7 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
                 size="sm"
                 placeholder="e.g., Book flight, Review contract"
                 isRequired
+                defaultValue={editTask?.title || ""}
               />
             </div>
 
@@ -124,23 +247,13 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
                 name="description"
                 rows={3}
                 placeholder="Add details about this task..."
+                defaultValue={editTask?.description || ""}
                 className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
               />
             </div>
 
-            {/* Status & Priority */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Status
-                </label>
-                <NativeSelect
-                  id="status"
-                  name="status"
-                  options={statusOptions}
-                  defaultValue="todo"
-                />
-              </div>
+            {/* Priority & Status (status only in edit mode) */}
+            <div className={`grid gap-4 ${isEditing ? "md:grid-cols-2" : ""}`}>
               <div className="flex flex-col gap-1.5">
                 <label htmlFor="priority" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Priority
@@ -149,9 +262,22 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
                   id="priority"
                   name="priority"
                   options={priorityOptions}
-                  defaultValue="medium"
+                  defaultValue={editTask?.priority || "medium"}
                 />
               </div>
+              {isEditing && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="status" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Status
+                  </label>
+                  <NativeSelect
+                    id="status"
+                    name="status"
+                    options={statusOptions}
+                    defaultValue={editTask?.status || "todo"}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Category */}
@@ -162,16 +288,39 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
               <NativeSelect
                 id="category"
                 name="category"
-                options={categoryOptions}
-                defaultValue="Admin"
+                options={effectiveCategoryOptions}
+                defaultValue={editTask?.category || effectiveCategoryOptions[0]?.value || ""}
               />
             </div>
 
-            {/* Due Date */}
+            {/* Due Date with Quick Buttons */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Due Date <span className="text-error-500">*</span>
               </label>
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={setToday}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={setTomorrow}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  type="button"
+                  onClick={setNextWeek}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Next Week
+                </button>
+              </div>
               <DatePicker
                 value={dueDate}
                 onChange={setDueDate}
@@ -179,46 +328,137 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
               />
             </div>
 
-            {/* Assignee */}
+            {/* Executive Assignment */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="executive" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Assign to Executive
+                Executive
               </label>
+              <p className="text-xs text-gray-400">Which executive this task relates to</p>
               <NativeSelect
                 id="executive"
                 name="executive"
-                options={executiveOptions}
-                defaultValue={executiveOptions[0]?.value || ""}
+                options={[{ label: "Select an executive...", value: "" }, ...executiveOptions]}
+                defaultValue={editTask?.executive && editTask.executive !== "Unassigned" ? editTask.executive : ""}
               />
             </div>
 
-            {/* Reminder Toggle */}
-            <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-gray-400" />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Set reminder</span>
-              </div>
-              <Toggle size="sm" isSelected={hasReminder} onChange={setHasReminder} />
+            {/* Assigned To (Team Member) */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="assigned_to" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Assigned To
+              </label>
+              <p className="text-xs text-gray-400">Who is responsible for completing this task</p>
+              <NativeSelect
+                id="assigned_to"
+                name="assigned_to"
+                options={[{ label: "Assign to myself", value: "" }, ...teamMemberOptions]}
+                defaultValue=""
+              />
             </div>
 
-            {hasReminder && (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="reminder" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Remind me
-                </label>
-                <NativeSelect
-                  id="reminder"
-                  name="reminder"
-                  options={[
-                    { label: "1 day before", value: "1d" },
-                    { label: "2 days before", value: "2d" },
-                    { label: "1 week before", value: "1w" },
-                    { label: "On due date", value: "0d" },
-                  ]}
-                  defaultValue="1d"
-                />
+            {/* Sub-tasks Section */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sub-tasks</span>
+                <span className="text-xs text-gray-400">{subtasks.length} {subtasks.length === 1 ? "item" : "items"}</span>
               </div>
-            )}
+
+              {subtasks.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {subtasks.map((st, idx) => (
+                    <div key={st.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                        {idx + 1}
+                      </span>
+                      <span className="flex-1 text-sm text-gray-900 dark:text-white">{st.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeSubtask(st.id)}
+                        className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-error-500 dark:hover:bg-gray-700"
+                      >
+                        <Trash01 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add a sub-task..."
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+                  className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"
+                />
+                <button
+                  type="button"
+                  onClick={addSubtask}
+                  disabled={!newSubtaskTitle.trim()}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-brand-400 dark:hover:bg-gray-700"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </button>
+              </div>
+            </div>
+
+            {/* Reminders Section */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reminders</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={addReminder}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50 dark:border-gray-700 dark:bg-gray-800 dark:text-brand-400 dark:hover:bg-gray-700"
+                >
+                  + Add Reminder
+                </button>
+              </div>
+              {reminders.length === 0 && (
+                <p className="text-xs text-gray-400 dark:text-gray-500">No reminders set. Click &quot;Add Reminder&quot; to add one.</p>
+              )}
+              {reminders.map((reminder, index) => (
+                <div key={reminder.id} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Reminder {index + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeReminder(reminder.id)}
+                      className="text-xs text-error-500 hover:text-error-700"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <select
+                      value={reminder.offset}
+                      onChange={(e) => updateReminder(reminder.id, 'offset', e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white"
+                    >
+                      <option value="15m">15 minutes before</option>
+                      <option value="30m">30 minutes before</option>
+                      <option value="1h">1 hour before</option>
+                      <option value="1d">1 day before</option>
+                      <option value="3d">3 days before</option>
+                      <option value="1w">1 week before</option>
+                      <option value="0d">On due date</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Optional note..."
+                      value={reminder.note}
+                      onChange={(e) => updateReminder(reminder.id, 'note', e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-500"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </form>
         </SlideoutMenu.Content>
 
@@ -228,7 +468,7 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit }: AddTaskSlide
             Cancel
           </Button>
           <Button type="submit" form="add-task-form" size="md" color="primary">
-            Create Task
+            {isEditing ? "Save Changes" : "Create Task"}
           </Button>
         </SlideoutMenu.Footer>
       </SlideoutMenu>

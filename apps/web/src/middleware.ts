@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   const isOnboardingRoute = pathname.startsWith('/onboarding');
 
   // Protected routes
-  const protectedRoutes = ['/dashboard', '/scheduling', '/tasks', '/key-dates', '/reports', '/team', '/events', '/contacts', '/concierge', '/settings'];
+  const protectedRoutes = ['/dashboard', '/ask-jenifer', '/scheduling', '/tasks', '/key-dates', '/reports', '/team', '/events', '/contacts', '/concierge', '/settings'];
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
 
   // Not logged in trying to access protected pages
@@ -67,8 +67,8 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // Prevent browser from caching protected pages (back-button after sign-out)
-  if (isProtectedRoute) {
+  // Prevent browser from caching protected/onboarding pages (back-button issues)
+  if (isProtectedRoute || isOnboardingRoute) {
     supabaseResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     supabaseResponse.headers.set('Pragma', 'no-cache');
   }

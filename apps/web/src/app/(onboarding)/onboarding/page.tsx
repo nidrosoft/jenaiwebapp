@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import confetti from 'canvas-confetti';
 import { Calendar, Link01, Users01, CheckCircle, Trash01 } from '@untitledui/icons';
@@ -18,6 +18,7 @@ import { Form } from '@/components/base/form/form';
 import { Progress } from '@/components/application/progress-steps/progress-steps';
 import type { ProgressIconType } from '@/components/application/progress-steps/progress-types';
 import { useOnboarding, type OnboardingData } from '@/hooks/use-onboarding';
+import { createClient } from '@/lib/supabase/client';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -41,11 +42,110 @@ export default function OnboardingPage() {
   };
 
   const handleSetupComplete = async () => {
-    await onboarding.completeOnboarding();
-    if (!onboarding.error) {
+    const success = await onboarding.completeOnboarding();
+    if (success) {
       setSetupComplete(true);
     }
   };
+
+  // Early-save org and user before the integrations step so OAuth works
+  const [earlySaved, setEarlySaved] = useState(false);
+  const handlePreIntegrationSave = useCallback(async () => {
+    if (earlySaved || onboarding.isInvitedUser) {
+      setCurrentStep(4);
+      return;
+    }
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setCurrentStep(4); return; }
+
+      // Check if user already exists
+      const { data: existing } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      if (existing) {
+        setEarlySaved(true);
+        setCurrentStep(4);
+        return;
+      }
+
+      const d = onboarding.data;
+      const slug = d.companyName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') + '-' + Date.now().toString(36);
+
+      // Create org
+      const { data: org, error: orgErr } = await supabase
+        .from('organizations')
+        .insert({
+          name: d.companyName,
+          slug,
+          size: d.companySize,
+          industry: d.industry,
+          website: d.website || null,
+          subscription_tier: 'trial',
+          subscription_status: 'active',
+          trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        .select()
+        .single();
+
+      if (orgErr || !org) {
+        console.error('Early org creation error:', orgErr);
+        setCurrentStep(4);
+        return;
+      }
+
+      // Create user
+      await supabase.from('users').upsert({
+        id: user.id,
+        org_id: org.id,
+        email: user.email!,
+        full_name: d.fullName,
+        job_title: d.jobTitle,
+        phone: d.phone || null,
+        role: 'admin',
+        onboarding_completed: false,
+        onboarding_step: 4,
+      });
+
+      // Create executives
+      const validExecs = d.executives.filter(e => e.fullName.trim());
+      if (validExecs.length > 0) {
+        const { data: created } = await supabase
+          .from('executive_profiles')
+          .insert(validExecs.map(e => ({
+            org_id: org.id,
+            full_name: e.fullName,
+            title: e.title || null,
+            email: e.email || null,
+            is_active: true,
+          })))
+          .select();
+
+        if (created?.length) {
+          await supabase.from('user_executive_assignments').insert(
+            created.map((ex, i) => ({
+              user_id: user.id,
+              executive_id: ex.id,
+              is_primary: i === 0,
+              role: 'assistant',
+            }))
+          );
+        }
+      }
+
+      setEarlySaved(true);
+    } catch (err) {
+      console.error('Early save error:', err);
+    }
+    setCurrentStep(4);
+  }, [earlySaved, onboarding.isInvitedUser, onboarding.data]);
 
   const getStepStatus = (stepIndex: number): 'complete' | 'current' | 'incomplete' => {
     if (stepIndex < currentStep) return 'complete';
@@ -204,7 +304,7 @@ export default function OnboardingPage() {
             )}
             {currentStep === 3 && (
               <ExecutivesStep 
-                onNext={() => setCurrentStep(4)} 
+                onNext={handlePreIntegrationSave} 
                 onBack={() => setCurrentStep(2)}
                 data={onboarding.data}
                 updateExecutive={onboarding.updateExecutive}
@@ -547,6 +647,45 @@ function ExecutivesStep({ onNext, onBack, data, updateExecutive, addExecutive, r
 }
 
 function IntegrationsStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) {
+  const [connectedProviders, setConnectedProviders] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchIntegrations = async () => {
+      try {
+        const response = await fetch('/api/integrations');
+        if (response.ok) {
+          const result = await response.json();
+          const list = result.data?.data ?? result.data ?? [];
+          const active = Array.isArray(list)
+            ? list.filter((i: any) => i.status === 'active').map((i: any) => i.provider)
+            : [];
+          setConnectedProviders(active);
+        }
+      } catch (err) {
+        console.error('Failed to fetch integrations:', err);
+      }
+    };
+    fetchIntegrations();
+
+    // Check for OAuth redirect success
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === 'true') {
+      fetchIntegrations();
+      window.history.replaceState({}, '', '/onboarding');
+    }
+  }, []);
+
+  const handleConnectGoogle = () => {
+    window.location.href = '/api/integrations/google/connect?redirect=/onboarding';
+  };
+
+  const handleConnectMicrosoft = () => {
+    window.location.href = '/api/integrations/microsoft/connect?redirect=/onboarding';
+  };
+
+  const isGoogleConnected = connectedProviders.includes('google');
+  const isMicrosoftConnected = connectedProviders.includes('microsoft');
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 flex flex-col justify-center">
@@ -555,7 +694,10 @@ function IntegrationsStep({ onBack, onNext }: { onBack: () => void; onNext: () =
           <p className="text-tertiary leading-relaxed">Sync your calendars and email for seamless scheduling. You can skip this for now and connect later.</p>
         </div>
         <div className="flex flex-col gap-3">
-          <button className="w-full flex items-center justify-between px-5 py-4 rounded-xl ring-1 ring-primary ring-inset hover:bg-primary_hover transition-colors">
+          <button
+            onClick={isGoogleConnected ? undefined : handleConnectGoogle}
+            className={`w-full flex items-center justify-between px-5 py-4 rounded-xl ring-1 ring-inset transition-colors ${isGoogleConnected ? 'ring-success-300 bg-success-50 dark:ring-success-700 dark:bg-success-500/10' : 'ring-primary hover:bg-primary_hover'}`}
+          >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden">
                 <GoogleCalendarIcon className="w-10 h-10" />
@@ -565,9 +707,19 @@ function IntegrationsStep({ onBack, onNext }: { onBack: () => void; onNext: () =
                 <p className="text-sm text-tertiary">Sync your Google Calendar events and meetings</p>
               </div>
             </div>
-            <span className="text-brand-secondary font-semibold">Connect</span>
+            {isGoogleConnected ? (
+              <span className="text-success-600 font-semibold flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Connected
+              </span>
+            ) : (
+              <span className="text-brand-secondary font-semibold">Connect</span>
+            )}
           </button>
-          <button className="w-full flex items-center justify-between px-5 py-4 rounded-xl ring-1 ring-primary ring-inset hover:bg-primary_hover transition-colors">
+          <button
+            onClick={isMicrosoftConnected ? undefined : handleConnectMicrosoft}
+            className={`w-full flex items-center justify-between px-5 py-4 rounded-xl ring-1 ring-inset transition-colors ${isMicrosoftConnected ? 'ring-success-300 bg-success-50 dark:ring-success-700 dark:bg-success-500/10' : 'ring-primary hover:bg-primary_hover'}`}
+          >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden">
                 <MicrosoftAzureIcon className="w-10 h-10" />
@@ -577,7 +729,14 @@ function IntegrationsStep({ onBack, onNext }: { onBack: () => void; onNext: () =
                 <p className="text-sm text-tertiary">Sync your Outlook Calendar events and meetings</p>
               </div>
             </div>
-            <span className="text-brand-secondary font-semibold">Connect</span>
+            {isMicrosoftConnected ? (
+              <span className="text-success-600 font-semibold flex items-center gap-1.5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Connected
+              </span>
+            ) : (
+              <span className="text-brand-secondary font-semibold">Connect</span>
+            )}
           </button>
         </div>
       </div>
@@ -619,38 +778,43 @@ function SetupStep({ onSetupComplete, isLoading: externalLoading, error: externa
   const [hasTriggeredComplete, setHasTriggeredComplete] = useState(false);
 
   useEffect(() => {
-    if (currentTask >= SETUP_TASKS.length && !hasTriggeredComplete) {
-      setHasTriggeredComplete(true);
-      onSetupComplete();
-      // Trigger confetti
-      const duration = 3 * 1000;
-      const animationEnd = Date.now() + duration;
-      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+    // All animated tasks finished
+    if (currentTask >= SETUP_TASKS.length) {
+      if (!hasTriggeredComplete) {
+        setHasTriggeredComplete(true);
+        onSetupComplete();
+        // Trigger confetti
+        const duration = 3 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
 
-      const randomInRange = (min: number, max: number) =>
-        Math.random() * (max - min) + min;
+        const randomInRange = (min: number, max: number) =>
+          Math.random() * (max - min) + min;
 
-      const interval = window.setInterval(() => {
-        const timeLeft = animationEnd - Date.now();
+        const interval = window.setInterval(() => {
+          const timeLeft = animationEnd - Date.now();
 
-        if (timeLeft <= 0) {
-          return clearInterval(interval);
-        }
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
 
-        const particleCount = 50 * (timeLeft / duration);
-        confetti({
-          ...defaults,
-          particleCount,
-          origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
-        });
-        confetti({
-          ...defaults,
-          particleCount,
-          origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
-        });
-      }, 250);
+          const particleCount = 50 * (timeLeft / duration);
+          confetti({
+            ...defaults,
+            particleCount,
+            origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+          });
+          confetti({
+            ...defaults,
+            particleCount,
+            origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+          });
+        }, 250);
 
-      return () => clearInterval(interval);
+        return () => clearInterval(interval);
+      }
+      // Already triggered — nothing left to animate, just return
+      return;
     }
 
     const task = SETUP_TASKS[currentTask];

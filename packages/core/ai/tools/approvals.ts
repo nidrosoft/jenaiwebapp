@@ -1,6 +1,6 @@
 /**
  * Approval Tools
- * AI tools for approval workflow management
+ * AI tools for approval workflow management — wired to real Supabase data
  */
 
 import { z } from 'zod';
@@ -27,9 +27,33 @@ registerTool({
   parameters: getApprovalsParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = getApprovalsParams.parse(params);
+    const { supabase, orgId } = context;
+    const execId = validated.executiveId || context.executiveId;
+
+    let query = supabase
+      .from('approvals')
+      .select('id, title, description, approval_type, status, urgency, amount, currency, category, due_date, submitted_by, created_at, decision_notes')
+      .eq('org_id', orgId)
+      .order('urgency', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(validated.limit);
+
+    if (validated.status !== 'all') {
+      query = query.eq('status', validated.status);
+    }
+    if (validated.urgency !== 'all') {
+      query = query.eq('urgency', validated.urgency);
+    }
+    if (execId) {
+      query = query.eq('executive_id', execId);
+    }
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Approvals retrieved', params: validated },
+      data: { approvals: data || [], count: data?.length || 0 },
     };
   },
 });
@@ -40,9 +64,20 @@ registerTool({
   parameters: getApprovalDetailsParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = getApprovalDetailsParams.parse(params);
+    const { supabase, orgId } = context;
+
+    const { data, error } = await supabase
+      .from('approvals')
+      .select('*')
+      .eq('id', validated.approvalId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Approval details retrieved', approvalId: validated.approvalId },
+      data: { approval: data },
     };
   },
 });
@@ -53,12 +88,51 @@ registerTool({
   parameters: summarizeApprovalParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = summarizeApprovalParams.parse(params);
+    const { supabase, orgId } = context;
+
+    // Fetch the approval
+    const { data: approval, error } = await supabase
+      .from('approvals')
+      .select('*')
+      .eq('id', validated.approvalId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (error || !approval) return { success: false, error: error?.message || 'Approval not found' };
+
+    // Fetch historical approvals of same type for context
+    const { data: historical } = await supabase
+      .from('approvals')
+      .select('amount, status')
+      .eq('org_id', orgId)
+      .eq('approval_type', approval.approval_type)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const avgAmount = historical && historical.length > 0
+      ? historical.reduce((sum: number, h: { amount?: number | null }) => sum + (h.amount || 0), 0) / historical.length
+      : null;
+
+    const isUnusual = avgAmount && approval.amount && approval.amount > avgAmount * 2;
+
+    const summary = [
+      `**${approval.title}**`,
+      `Type: ${approval.approval_type} | Urgency: ${approval.urgency}`,
+      approval.amount ? `Amount: $${approval.amount.toLocaleString()} ${approval.currency || 'USD'}` : null,
+      approval.description ? `Description: ${approval.description}` : null,
+      approval.due_date ? `Due: ${approval.due_date}` : null,
+      avgAmount ? `Average for this type: $${avgAmount.toFixed(0)}` : null,
+      isUnusual ? '⚠️ Amount is significantly above average — review carefully' : null,
+    ].filter(Boolean).join('\n');
+
     return {
       success: true,
-      data: { 
-        message: 'Approval summarized', 
+      data: {
         approvalId: validated.approvalId,
-        summary: 'Summary would be generated here',
+        summary,
+        is_unusual: isUnusual || false,
+        average_amount: avgAmount,
       },
     };
   },

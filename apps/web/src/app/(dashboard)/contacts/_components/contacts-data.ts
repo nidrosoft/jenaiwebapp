@@ -13,6 +13,7 @@ export interface Contact {
   tags?: string[];
   notes?: string;
   lastContact?: string;
+  birthday?: string;
 }
 
 export const categoryColors: Record<Contact["category"], string> = {

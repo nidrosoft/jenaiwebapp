@@ -18,6 +18,8 @@ import {
 } from '@/lib/api/utils';
 import { createMeetingSchema, meetingQuerySchema } from '@/lib/api/schemas';
 import { createClient } from '@/lib/supabase/server';
+import { eventBus } from '@jeniferai/core-event-bus';
+import { syncMeetingToExternalCalendars } from '@/lib/calendar-sync';
 
 async function handleGet(request: NextRequest, context: AuthContext) {
   const params = parseQueryParams(request.url);
@@ -31,11 +33,16 @@ async function handleGet(request: NextRequest, context: AuthContext) {
   const filters = validation.data;
 
   try {
-    const supabase = await createClient();
-
+    // Use admin client to bypass RLS (we already authenticated via middleware)
+    const { createClient: createSupabaseAdmin } = await import('@supabase/supabase-js');
+    const supabase = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+    
     let query = supabase
       .from('meetings')
-      .select('*, executive:executive_profiles!executive_id(full_name)', { count: 'exact' })
+      .select('*, executive:executive_profiles(full_name)', { count: 'exact' })
       .eq('org_id', context.user.org_id)
       .is('deleted_at', null);
 
@@ -141,7 +148,30 @@ async function handlePost(request: NextRequest, context: AuthContext) {
     }
 
     // TODO: If create_video_conference is true, create video conference link
-    // TODO: Emit meeting.created event
+
+    // Emit meeting.created event (fire-and-forget for proactive AI analysis)
+    void eventBus.publish({
+      type: 'meeting.created',
+      payload: data,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        source: 'api.meetings.post',
+        orgId: context.user.org_id,
+        userId: context.user.id,
+        correlationId: data.id,
+      },
+    });
+
+    // Sync to external calendars (fire-and-forget)
+    void syncMeetingToExternalCalendars(data, context.user.id, context.user.org_id)
+      .then((results) => {
+        if (results.length > 0) {
+          console.log('Calendar sync results:', results);
+        }
+      })
+      .catch((err) => {
+        console.error('Calendar sync error:', err);
+      });
 
     return successResponse({ data }, 201);
   } catch (error) {

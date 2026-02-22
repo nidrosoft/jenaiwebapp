@@ -15,6 +15,7 @@ import {
 } from '@/lib/api/utils';
 import { updateMeetingSchema } from '@/lib/api/schemas';
 import { createClient } from '@/lib/supabase/server';
+import { eventBus } from '@jeniferai/core-event-bus';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -96,7 +97,18 @@ async function handlePatch(
       return internalErrorResponse(error.message);
     }
 
-    // TODO: Emit meeting.updated event
+    // Emit meeting.updated event (fire-and-forget for proactive AI)
+    void eventBus.publish({
+      type: 'meeting.updated',
+      payload: data,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        source: 'api.meetings.patch',
+        orgId: context.user.org_id,
+        userId: context.user.id,
+        correlationId: id,
+      },
+    });
 
     return successResponse({ data });
   } catch (error) {
@@ -127,7 +139,18 @@ async function handleDelete(
       return internalErrorResponse(error.message);
     }
 
-    // TODO: Emit meeting.deleted event
+    // Emit meeting.deleted event (fire-and-forget)
+    void eventBus.publish({
+      type: 'meeting.deleted',
+      payload: { id },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        source: 'api.meetings.delete',
+        orgId: context.user.org_id,
+        userId: context.user.id,
+        correlationId: id,
+      },
+    });
 
     return successResponse({ success: true });
   } catch (error) {

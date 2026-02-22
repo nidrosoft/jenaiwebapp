@@ -4,6 +4,8 @@
  */
 
 import { z } from 'zod';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@jeniferai/core-database';
 
 export interface ToolDefinition {
   name: string;
@@ -17,6 +19,7 @@ export interface ToolContext {
   orgId: string;
   executiveId?: string;
   timezone: string;
+  supabase: SupabaseClient<Database>;
 }
 
 export interface ToolResult {

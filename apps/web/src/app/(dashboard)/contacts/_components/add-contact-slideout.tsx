@@ -69,6 +69,7 @@ export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContac
       category: formData.get("category") as Contact["category"],
       tags: tags.length > 0 ? tags : undefined,
       notes: formData.get("notes") as string || undefined,
+      birthday: formData.get("birthday") as string || undefined,
     };
 
     onSubmit?.(contact);
@@ -162,6 +163,19 @@ export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContac
                   placeholder="e.g., CEO, Manager"
                 />
               </div>
+            </div>
+
+            {/* Birthday */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="birthday" className="text-sm font-medium text-secondary">
+                Birthday
+              </label>
+              <input
+                id="birthday"
+                name="birthday"
+                type="date"
+                className="w-full rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
+              />
             </div>
 
             {/* Category */}

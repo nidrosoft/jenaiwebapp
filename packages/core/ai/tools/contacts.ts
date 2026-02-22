@@ -1,6 +1,6 @@
 /**
  * Contact Tools
- * AI tools for contact and relationship management
+ * AI tools for contact and relationship management — wired to real Supabase data
  */
 
 import { z } from 'zod';
@@ -30,9 +30,32 @@ registerTool({
   parameters: searchContactsParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = searchContactsParams.parse(params);
+    const { supabase, orgId } = context;
+    const execId = validated.executiveId || context.executiveId;
+
+    const searchTerm = `%${validated.query}%`;
+
+    let query = supabase
+      .from('contacts')
+      .select('id, full_name, email, phone, company, title, category, relationship_notes, relationship_strength, last_contacted_at, tags')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .or(`full_name.ilike.${searchTerm},email.ilike.${searchTerm},company.ilike.${searchTerm}`)
+      .limit(validated.limit);
+
+    if (validated.category !== 'all') {
+      query = query.eq('category', validated.category);
+    }
+    if (execId) {
+      query = query.eq('executive_id', execId);
+    }
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Contacts searched', params: validated },
+      data: { contacts: data || [], count: data?.length || 0 },
     };
   },
 });
@@ -43,9 +66,20 @@ registerTool({
   parameters: getContactDetailsParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = getContactDetailsParams.parse(params);
+    const { supabase, orgId } = context;
+
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('id', validated.contactId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Contact details retrieved', contactId: validated.contactId },
+      data: { contact: data },
     };
   },
 });
@@ -56,9 +90,50 @@ registerTool({
   parameters: getContactHistoryParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = getContactHistoryParams.parse(params);
+    const { supabase, orgId } = context;
+
+    // First get the contact's email for meeting lookup
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('email, full_name')
+      .eq('id', validated.contactId)
+      .eq('org_id', orgId)
+      .single();
+
+    if (!contact) return { success: false, error: 'Contact not found' };
+
+    const results: Record<string, unknown> = { contact_name: contact.full_name };
+
+    // Get meetings where this contact's email appears in attendees
+    if (validated.includeMeetings && contact.email) {
+      const { data: meetings } = await supabase
+        .from('meetings')
+        .select('id, title, start_time, end_time, status, description')
+        .eq('org_id', orgId)
+        .is('deleted_at', null)
+        .contains('attendees', JSON.stringify([{ email: contact.email }]))
+        .order('start_time', { ascending: false })
+        .limit(validated.limit);
+
+      results.meetings = meetings || [];
+      results.meeting_count = (meetings || []).length;
+    }
+
+    // Get tasks related to this contact
+    const { data: tasks } = await supabase
+      .from('tasks')
+      .select('id, title, status, due_date')
+      .eq('org_id', orgId)
+      .eq('related_contact_id', validated.contactId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    results.related_tasks = tasks || [];
+
     return {
       success: true,
-      data: { message: 'Contact history retrieved', contactId: validated.contactId },
+      data: results,
     };
   },
 });

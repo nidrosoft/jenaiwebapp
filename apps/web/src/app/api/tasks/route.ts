@@ -18,6 +18,7 @@ import {
 } from '@/lib/api/utils';
 import { createTaskSchema, taskQuerySchema } from '@/lib/api/schemas';
 import { createClient } from '@/lib/supabase/server';
+import { eventBus } from '@jeniferai/core-event-bus';
 
 async function handleGet(request: NextRequest, context: AuthContext) {
   const params = parseQueryParams(request.url);
@@ -145,7 +146,18 @@ async function handlePost(request: NextRequest, context: AuthContext) {
       return internalErrorResponse(error.message);
     }
 
-    // TODO: Emit task.created event
+    // Emit task.created event (fire-and-forget for duplicate detection)
+    void eventBus.publish({
+      type: 'task.created',
+      payload: data,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        source: 'api.tasks.post',
+        orgId: context.user.org_id,
+        userId: context.user.id,
+        correlationId: data.id,
+      },
+    });
 
     return successResponse({ data }, 201);
   } catch (error) {

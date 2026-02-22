@@ -22,9 +22,11 @@ interface TaskListViewProps {
   selectedTask?: Task | null;
   onTaskClick?: (task: Task) => void;
   onToggleComplete?: (taskId: string) => void;
+  onEditTask?: (task: Task) => void;
+  onDeleteTask?: (taskId: string) => void;
 }
 
-export function TaskListView({ tasks, selectedTask, onTaskClick, onToggleComplete }: TaskListViewProps) {
+export function TaskListView({ tasks, selectedTask, onTaskClick, onToggleComplete, onEditTask, onDeleteTask }: TaskListViewProps) {
   if (tasks.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
@@ -130,8 +132,14 @@ export function TaskListView({ tasks, selectedTask, onTaskClick, onToggleComplet
 
             {/* Actions */}
             <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-              <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} />
-              <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} />
+              <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onEditTask?.(task);
+              }} />
+              <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} onClick={(e: React.MouseEvent) => {
+                e.stopPropagation();
+                onDeleteTask?.(task.id);
+              }} />
             </div>
           </div>
         );

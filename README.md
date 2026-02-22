@@ -545,3 +545,4 @@ docs(readme): update setup instructions
 ## License
 
 Proprietary - All rights reserved
+![alt text](<Screenshot 2026-02-12 at 9.58.21 AM.png>)

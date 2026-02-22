@@ -50,7 +50,8 @@ async function handleGet(request: NextRequest, context: AuthContext) {
     let query = supabase
       .from('delegations')
       .select('*, tasks(*)', { count: 'exact' })
-      .eq('org_id', context.user.org_id);
+      .eq('org_id', context.user.org_id)
+      .is('deleted_at', null);
 
     // Filter by direction
     if (filters.direction === 'sent') {

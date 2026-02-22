@@ -19,7 +19,6 @@ import {
   Users01,
   RefreshCw01,
   CheckCircle,
-  XCircle,
 } from "@untitledui/icons";
 import { AddDelegationSlideout, type DelegationFormData } from "../_components/add-delegation-slideout";
 import type { SortDescriptor } from "react-aria-components";
@@ -34,6 +33,7 @@ import { InputBase } from "@/components/base/input/input";
 import { useDelegations, type DatabaseDelegation } from "@/hooks/useDelegations";
 import { useTasks } from "@/hooks/useTasks";
 import { notify } from "@/lib/notifications";
+import { ConfirmDeleteDialog } from "@/components/application/confirm-delete-dialog";
 
 // Delegation type definition for UI
 interface Delegation {
@@ -74,13 +74,13 @@ const getStatusLabel = (status: Delegation["status"]) => {
     case "pending":
       return "Pending";
     case "active":
-      return "Active";
+      return "In Progress";
     case "completed":
       return "Completed";
     case "overdue":
       return "Overdue";
     case "cancelled":
-      return "Rejected";
+      return "Cancelled";
     default:
       return status;
   }
@@ -262,11 +262,47 @@ export default function DelegationsPage() {
   const handleRejectDelegation = useCallback(async (id: string) => {
     try {
       await updateDelegationStatus(id, 'rejected');
-      notify.success('Delegation rejected', 'You have rejected this task.');
+      notify.success('Delegation cancelled', 'The delegation has been cancelled.');
     } catch (err) {
-      notify.error('Failed to reject delegation', 'Please try again.');
+      notify.error('Failed to cancel delegation', 'Please try again.');
     }
   }, [updateDelegationStatus]);
+
+  // Edit delegation - open the slideout with pre-filled data
+  const [editingDelegation, setEditingDelegation] = useState<Delegation | null>(null);
+  const handleEditDelegation = useCallback((delegation: Delegation) => {
+    setEditingDelegation(delegation);
+    setIsAddDelegationOpen(true);
+  }, []);
+
+  // Delete delegation
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmDelegationId, setDeleteConfirmDelegationId] = useState<string | null>(null);
+  const [deleteConfirmDelegationName, setDeleteConfirmDelegationName] = useState("");
+
+  const promptDeleteDelegation = useCallback((id: string, title?: string) => {
+    setDeleteConfirmDelegationId(id);
+    setDeleteConfirmDelegationName(title || '');
+  }, []);
+
+  const confirmDeleteDelegation = useCallback(async () => {
+    if (!deleteConfirmDelegationId) return;
+    setDeletingId(deleteConfirmDelegationId);
+    try {
+      const response = await fetch(`/api/delegations/${deleteConfirmDelegationId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete delegation');
+      notify.success('Delegation deleted', 'The delegation has been removed.');
+      refetch();
+    } catch (err) {
+      notify.error('Failed to delete delegation', 'Please try again.');
+    } finally {
+      setDeletingId(null);
+      setDeleteConfirmDelegationId(null);
+      setDeleteConfirmDelegationName('');
+    }
+  }, [refetch, deleteConfirmDelegationId]);
 
   const filteredDelegations = useMemo(() => {
     let filtered = Array.isArray(allDelegations) ? allDelegations : [];
@@ -376,7 +412,7 @@ export default function DelegationsPage() {
             placeholder="Search delegations..."
             icon={SearchLg}
             value={searchQuery}
-            onChange={(value) => setSearchQuery(value)}
+            onChange={(e) => setSearchQuery(typeof e === 'string' ? e : (e?.target as HTMLInputElement)?.value ?? '')}
           />
         </div>
       </div>
@@ -441,27 +477,18 @@ export default function DelegationsPage() {
                 </Table.Cell>
                 <Table.Cell className="pr-4 pl-4">
                   <div className="flex justify-end gap-1 max-lg:hidden">
-                    {/* Show Accept/Reject for pending delegations to me */}
-                    {delegation.status === "pending" && delegation.to === "Me" && (
-                      <>
-                        <ButtonUtility 
-                          size="xs" 
-                          color="tertiary" 
-                          tooltip="Accept" 
-                          icon={CheckCircle}
-                          onClick={() => handleAcceptDelegation(delegation.id)}
-                        />
-                        <ButtonUtility 
-                          size="xs" 
-                          color="tertiary" 
-                          tooltip="Reject" 
-                          icon={XCircle}
-                          onClick={() => handleRejectDelegation(delegation.id)}
-                        />
-                      </>
+                    {/* Mark as in-progress for pending delegations */}
+                    {delegation.status === "pending" && (
+                      <ButtonUtility 
+                        size="xs" 
+                        color="tertiary" 
+                        tooltip="Start Task" 
+                        icon={ArrowRight}
+                        onClick={() => handleAcceptDelegation(delegation.id)}
+                      />
                     )}
-                    {/* Show Complete for active delegations to me */}
-                    {(delegation.status === "active" || delegation.status === "overdue") && delegation.to === "Me" && (
+                    {/* Mark Complete for active/pending delegations */}
+                    {(delegation.status === "active" || delegation.status === "pending" || delegation.status === "overdue") && (
                       <ButtonUtility 
                         size="xs" 
                         color="tertiary" 
@@ -470,7 +497,8 @@ export default function DelegationsPage() {
                         onClick={() => handleCompleteDelegation(delegation.id)}
                       />
                     )}
-                    <ButtonUtility size="xs" color="tertiary" tooltip="View" icon={Eye} />
+                    <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} onClick={() => handleEditDelegation(delegation)} />
+                    <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} onClick={() => promptDeleteDelegation(delegation.id, delegation.task_title || delegation.notes)} />
                   </div>
                   <div className="flex items-center justify-end lg:hidden">
                     <TableRowActionsDropdown />
@@ -488,8 +516,21 @@ export default function DelegationsPage() {
       {/* Add Delegation Slideout */}
       <AddDelegationSlideout
         isOpen={isAddDelegationOpen}
-        onOpenChange={setIsAddDelegationOpen}
+        onOpenChange={(open) => {
+          setIsAddDelegationOpen(open);
+          if (!open) setEditingDelegation(null);
+        }}
         onSubmit={handleAddDelegation}
+      />
+
+      {/* Delete Delegation Confirmation */}
+      <ConfirmDeleteDialog
+        isOpen={!!deleteConfirmDelegationId}
+        onClose={() => { setDeleteConfirmDelegationId(null); setDeleteConfirmDelegationName(''); }}
+        onConfirm={confirmDeleteDelegation}
+        title="Delete Delegation"
+        itemName={deleteConfirmDelegationName}
+        isLoading={!!deletingId}
       />
     </div>
   );

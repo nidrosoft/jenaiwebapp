@@ -3,6 +3,13 @@
  * Shared types and sample data for the To-Do page components
  */
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  completed_at?: string | null;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -16,6 +23,7 @@ export interface Task {
   createdAt: string;
   comments?: number;
   attachments?: number;
+  subtasks?: Subtask[];
 }
 
 export type TaskStatus = "todo" | "in_progress" | "approval" | "done";

@@ -79,6 +79,8 @@ export function NewMeetingSlideout({ isOpen, onOpenChange, onSubmit }: NewMeetin
   const [isRecurring, setIsRecurring] = useState(false);
   const [selectedDate, setSelectedDate] = useState<DateValue | null>(today(getLocalTimeZone()) as unknown as DateValue);
   const [calendarOptions, setCalendarOptions] = useState<{ label: string; value: string }[]>([]);
+  const [attendeeEmails, setAttendeeEmails] = useState<string[]>([]);
+  const [attendeeInput, setAttendeeInput] = useState("");
 
   useEffect(() => {
     const fetchExecutives = async () => {
@@ -111,7 +113,7 @@ export function NewMeetingSlideout({ isOpen, onOpenChange, onSubmit }: NewMeetin
       meetingType: formData.get("meetingType") as string,
       location: formData.get("location") as string,
       videoLink: formData.get("videoLink") as string,
-      attendees: formData.get("attendees") as string,
+      attendees: attendeeEmails.join(', '),
       description: formData.get("description") as string,
       isAllDay,
       isRecurring,
@@ -120,6 +122,8 @@ export function NewMeetingSlideout({ isOpen, onOpenChange, onSubmit }: NewMeetin
       calendar: formData.get("calendar") as string,
     };
     onSubmit?.(data);
+    setAttendeeEmails([]);
+    setAttendeeInput('');
     onOpenChange(false);
   };
 
@@ -271,18 +275,62 @@ export function NewMeetingSlideout({ isOpen, onOpenChange, onSubmit }: NewMeetin
               </div>
             </div>
 
-            {/* Attendees */}
+            {/* Attendees (Multi-input) */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="attendees" className="text-sm font-medium text-secondary">
+              <label className="text-sm font-medium text-secondary">
                 Attendees
               </label>
-              <Input
-                id="attendees"
-                name="attendees"
-                size="sm"
-                icon={Users01}
-                placeholder="Add attendees by email"
-              />
+              {attendeeEmails.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {attendeeEmails.map((email) => (
+                    <span key={email} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-400">
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() => setAttendeeEmails(prev => prev.filter(e => e !== email))}
+                        className="ml-0.5 text-brand-400 hover:text-brand-600 dark:hover:text-brand-300"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Users01 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-quaternary" />
+                  <input
+                    type="email"
+                    value={attendeeInput}
+                    onChange={(e) => setAttendeeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const email = attendeeInput.trim().replace(/,$/, '');
+                        if (email && email.includes('@') && !attendeeEmails.includes(email)) {
+                          setAttendeeEmails(prev => [...prev, email]);
+                          setAttendeeInput('');
+                        }
+                      }
+                    }}
+                    placeholder={attendeeEmails.length > 0 ? "Add another email..." : "Type email and press Enter"}
+                    className="w-full rounded-lg border border-secondary bg-primary pl-9 pr-3 py-2 text-sm text-primary placeholder:text-quaternary focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const email = attendeeInput.trim();
+                    if (email && email.includes('@') && !attendeeEmails.includes(email)) {
+                      setAttendeeEmails(prev => [...prev, email]);
+                      setAttendeeInput('');
+                    }
+                  }}
+                  className="rounded-lg border border-secondary bg-primary px-3 py-2 text-sm font-medium text-secondary hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  Add
+                </button>
+              </div>
             </div>
 
             {/* Reminder */}

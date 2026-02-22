@@ -14,6 +14,7 @@ interface KanbanBoardProps {
   tasks: Task[];
   onTaskClick?: (task: Task) => void;
   onStatusChange?: (taskId: string, newStatus: TaskStatus) => void;
+  onAddTask?: (status: TaskStatus) => void;
 }
 
 interface KanbanColumnProps {
@@ -132,7 +133,7 @@ function KanbanColumn({ status, tasks, onTaskClick, onAddTask, onDrop, isDragOve
   );
 }
 
-export function KanbanBoard({ tasks, onTaskClick, onStatusChange }: KanbanBoardProps) {
+export function KanbanBoard({ tasks, onTaskClick, onStatusChange, onAddTask }: KanbanBoardProps) {
   const columns: TaskStatus[] = ["todo", "in_progress", "approval", "done"];
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
 
@@ -154,6 +155,7 @@ export function KanbanBoard({ tasks, onTaskClick, onStatusChange }: KanbanBoardP
           status={status}
           tasks={getTasksByStatus(status)}
           onTaskClick={onTaskClick}
+          onAddTask={() => onAddTask?.(status)}
           onDrop={handleDrop}
           isDragOver={dragOverColumn === status}
           onDragOver={setDragOverColumn}

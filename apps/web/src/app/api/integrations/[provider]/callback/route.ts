@@ -101,6 +101,30 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         expires_in: 0, // Slack tokens don't expire
       };
       providerEmail = slackData.authed_user?.email;
+    } else if (provider === 'zoom') {
+      const credentials = Buffer.from(
+        `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`
+      ).toString('base64');
+      const tokenResponse = await fetch('https://zoom.us/oauth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${credentials}`,
+        },
+        body: new URLSearchParams({
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: process.env.ZOOM_REDIRECT_URI!,
+        }),
+      });
+      tokens = await tokenResponse.json();
+
+      // Get user info
+      const userInfoResponse = await fetch('https://api.zoom.us/v2/users/me', {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      });
+      const userInfo = await userInfoResponse.json();
+      providerEmail = userInfo.email;
     } else {
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=integrations&error=unsupported_provider`
@@ -118,7 +142,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       org_id,
       user_id,
       provider,
-      integration_type: provider === 'slack' ? 'messaging' : 'calendar',
+      integration_type: provider === 'slack' ? 'messaging' : provider === 'zoom' ? 'video' : 'calendar',
       status: 'active',
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -142,7 +166,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.redirect(`${redirect_url}&success=true`);
+    const separator = redirect_url.includes('?') ? '&' : '?';
+    return NextResponse.redirect(`${redirect_url}${separator}success=true`);
   } catch (err) {
     console.error('OAuth callback error:', err);
     return NextResponse.redirect(

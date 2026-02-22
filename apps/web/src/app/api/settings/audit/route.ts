@@ -22,7 +22,7 @@ async function handleGet(request: NextRequest, context: AuthContext) {
 
     const { data, error, count } = await supabase
       .from('audit_log')
-      .select('*', { count: 'exact' })
+      .select('*, user:users!user_id(email, full_name)', { count: 'exact' })
       .eq('org_id', context.user.org_id)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);

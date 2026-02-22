@@ -18,6 +18,8 @@ import {
 } from '@/lib/api/utils';
 import { createApprovalSchema, approvalQuerySchema } from '@/lib/api/schemas';
 import { createClient } from '@/lib/supabase/server';
+import { eventBus } from '@jeniferai/core-event-bus';
+import { recordAuditLog, getClientIp, getUserAgent } from '@/lib/audit';
 
 async function handleGet(request: NextRequest, context: AuthContext) {
   const params = parseQueryParams(request.url);
@@ -102,20 +104,20 @@ async function handlePost(request: NextRequest, context: AuthContext) {
   try {
     const supabase = await createClient();
 
-    const approvalData = {
+    const approvalData: Record<string, unknown> = {
       org_id: context.user.org_id,
       title: body.title,
-      description: body.description,
+      description: body.description || null,
       approval_type: body.approval_type,
       status: 'pending',
-      urgency: body.urgency,
-      amount: body.amount,
-      currency: body.currency,
-      due_date: body.due_date,
+      urgency: body.urgency || 'medium',
+      amount: body.amount || null,
+      currency: body.currency || null,
+      due_date: body.due_date || null,
       executive_id: body.executive_id,
       submitted_by: context.user.id,
-      attachments: body.attachments,
-      comments: [],
+      category: body.category || null,
+      attachments: body.attachments || null,
     };
 
     const { data, error } = await supabase
@@ -129,10 +131,31 @@ async function handlePost(request: NextRequest, context: AuthContext) {
       return internalErrorResponse(error.message);
     }
 
-    // TODO: Emit approval.created event
-    // TODO: Send notification to executive
+    void recordAuditLog({
+      orgId: context.user.org_id,
+      userId: context.user.id,
+      action: 'created',
+      entityType: 'approval',
+      entityId: data.id,
+      newValues: { title: data.title, approval_type: data.approval_type, urgency: data.urgency },
+      ipAddress: getClientIp(request),
+      userAgent: getUserAgent(request),
+    });
 
-    return successResponse({ data }, 201);
+    // Emit approval.created event (fire-and-forget for anomaly detection)
+    void eventBus.publish({
+      type: 'approval.created',
+      payload: data,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        source: 'api.approvals.post',
+        orgId: context.user.org_id,
+        userId: context.user.id,
+        correlationId: data.id,
+      },
+    });
+
+    return successResponse(data, 201);
   } catch (error) {
     console.error('Unexpected error:', error);
     return internalErrorResponse();

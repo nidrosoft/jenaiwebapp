@@ -23,6 +23,7 @@ import {
 import { AddDateSlideout } from "./_components/add-date-slideout";
 import { EditDateSlideout } from "./_components/edit-date-slideout";
 import { useKeyDates, type DatabaseKeyDate, type CreateKeyDateData } from "@/hooks/useKeyDates";
+import { ConfirmDeleteDialog } from "@/components/application/confirm-delete-dialog";
 import { notify } from "@/lib/notifications";
 
 type ViewMode = "list" | "card" | "calendar";
@@ -66,6 +67,8 @@ export default function KeyDatesPage() {
   const [isAddDateOpen, setIsAddDateOpen] = useState(false);
   const [isEditDateOpen, setIsEditDateOpen] = useState(false);
   const [editingKeyDate, setEditingKeyDate] = useState<KeyDate | null>(null);
+  const [deleteKeyDateId, setDeleteKeyDateId] = useState<string | null>(null);
+  const [deleteKeyDateName, setDeleteKeyDateName] = useState("");
 
   // Fetch key dates from database
   const { keyDates: dbKeyDates, isLoading, error, stats, createKeyDate, updateKeyDate, deleteKeyDate, refetch } = useKeyDates();
@@ -238,15 +241,24 @@ export default function KeyDatesPage() {
     }
   }, [updateKeyDate]);
 
-  const handleDelete = useCallback(async (id: string) => {
+  const promptDeleteKeyDate = useCallback((id: string, title?: string) => {
+    setDeleteKeyDateId(id);
+    setDeleteKeyDateName(title || '');
+  }, []);
+
+  const confirmDeleteKeyDate = useCallback(async () => {
+    if (!deleteKeyDateId) return;
     try {
-      await deleteKeyDate(id);
+      await deleteKeyDate(deleteKeyDateId);
       notify.success('Key date deleted', 'The key date has been removed.');
     } catch (err) {
       console.error('Failed to delete key date:', err);
       notify.error('Failed to delete key date', 'Please try again.');
+    } finally {
+      setDeleteKeyDateId(null);
+      setDeleteKeyDateName('');
     }
-  }, [deleteKeyDate]);
+  }, [deleteKeyDate, deleteKeyDateId]);
 
   // Show loading state
   if (isLoading) {
@@ -375,7 +387,7 @@ export default function KeyDatesPage() {
                     key={date.id}
                     keyDate={date}
                     onEdit={handleEdit}
-                    onDelete={handleDelete}
+                    onDelete={(id) => promptDeleteKeyDate(id, date.title)}
                   />
                 ))}
               </div>
@@ -389,7 +401,7 @@ export default function KeyDatesPage() {
               key={date.id}
               keyDate={date}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={(id) => promptDeleteKeyDate(id, date.title)}
             />
           ))}
         </div>
@@ -420,6 +432,15 @@ export default function KeyDatesPage() {
         onOpenChange={setIsEditDateOpen}
         keyDate={editingKeyDate}
         onSubmit={handleEditSubmit}
+      />
+
+      {/* Delete Key Date Confirmation */}
+      <ConfirmDeleteDialog
+        isOpen={!!deleteKeyDateId}
+        onClose={() => { setDeleteKeyDateId(null); setDeleteKeyDateName(''); }}
+        onConfirm={confirmDeleteKeyDate}
+        title="Delete Key Date"
+        itemName={deleteKeyDateName}
       />
     </div>
   );

@@ -15,6 +15,7 @@ import {
 } from '@/lib/api/utils';
 import { updateTaskSchema } from '@/lib/api/schemas';
 import { createClient } from '@/lib/supabase/server';
+import { eventBus } from '@jeniferai/core-event-bus';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -104,8 +105,33 @@ async function handlePatch(
       return internalErrorResponse(error.message);
     }
 
-    // TODO: Emit task.updated event
-    // TODO: If status changed to done, emit task.completed event
+    // Emit task.updated event (fire-and-forget)
+    void eventBus.publish({
+      type: 'task.updated',
+      payload: data,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        source: 'api.tasks.patch',
+        orgId: context.user.org_id,
+        userId: context.user.id,
+        correlationId: id,
+      },
+    });
+
+    // If status changed to done, also emit task.completed
+    if (body.status === 'done' && existing.status !== 'done') {
+      void eventBus.publish({
+        type: 'task.completed',
+        payload: data,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          source: 'api.tasks.patch',
+          orgId: context.user.org_id,
+          userId: context.user.id,
+          correlationId: id,
+        },
+      });
+    }
 
     return successResponse({ data });
   } catch (error) {

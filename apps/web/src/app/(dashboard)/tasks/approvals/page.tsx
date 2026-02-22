@@ -16,6 +16,7 @@ import {
   File06,
   HelpCircle,
   MessageSquare01,
+  Plus,
   Users01,
   XClose,
 } from "@untitledui/icons";
@@ -23,7 +24,8 @@ import { TabList, Tabs } from "@/components/application/tabs/tabs";
 import { Button } from "@/components/base/buttons/button";
 import { BadgeWithDot } from "@/components/base/badges/badges";
 import { Avatar } from "@/components/base/avatar/avatar";
-import { useApprovals, type DatabaseApproval } from "@/hooks/useApprovals";
+import { useApprovals, type DatabaseApproval, type CreateApprovalData } from "@/hooks/useApprovals";
+import { AddApprovalSlideout } from "../_components/add-approval-slideout";
 import { notify } from "@/lib/notifications";
 
 // Approval type definition
@@ -111,7 +113,7 @@ const convertToUIApproval = (dbApproval: DatabaseApproval): Approval => ({
   title: dbApproval.title,
   description: dbApproval.description || "",
   type: dbApproval.approval_type,
-  amount: dbApproval.amount ? `$${dbApproval.amount.toFixed(2)}` : undefined,
+  amount: dbApproval.amount ? `$${Number(dbApproval.amount).toFixed(2)}` : undefined,
   submittedBy: (dbApproval as any).submitter?.full_name || "User",
   submittedAt: new Date(dbApproval.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
   status: dbApproval.status === "info_requested" ? "info-requested" : dbApproval.status,
@@ -123,9 +125,10 @@ const convertToUIApproval = (dbApproval: DatabaseApproval): Approval => ({
 
 export default function ApprovalsPage() {
   const [activeTab, setActiveTab] = useState("pending");
+  const [isAddApprovalOpen, setIsAddApprovalOpen] = useState(false);
 
   // Fetch approvals from database
-  const { approvals: dbApprovals, isLoading, stats, updateApprovalStatus, refetch } = useApprovals();
+  const { approvals: dbApprovals, isLoading, stats, createApproval, updateApprovalStatus, refetch } = useApprovals();
 
   // Convert database approvals to UI format
   const approvals = useMemo(() => {
@@ -141,6 +144,15 @@ export default function ApprovalsPage() {
     if (activeTab === "pending") return safeApprovals.filter((a) => a.status === "pending" || a.status === "info-requested");
     return safeApprovals.filter((a) => a.status === activeTab);
   }, [approvals, activeTab]);
+
+  const handleCreateApproval = useCallback(async (data: CreateApprovalData) => {
+    try {
+      await createApproval(data);
+      notify.success('Approval submitted', 'Your approval request has been submitted.');
+    } catch (err) {
+      notify.error('Failed to create approval', err instanceof Error ? err.message : 'Please try again.');
+    }
+  }, [createApproval]);
 
   const handleApprove = useCallback(async (id: string) => {
     try {
@@ -190,6 +202,9 @@ export default function ApprovalsPage() {
             </BadgeWithDot>
           )}
         </div>
+        <Button size="md" color="primary" iconLeading={Plus} onClick={() => setIsAddApprovalOpen(true)}>
+          New Approval
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -318,6 +333,13 @@ export default function ApprovalsPage() {
           })
         )}
       </div>
+
+      {/* Add Approval Slideout */}
+      <AddApprovalSlideout
+        isOpen={isAddApprovalOpen}
+        onOpenChange={setIsAddApprovalOpen}
+        onSubmit={handleCreateApproval}
+      />
     </div>
   );
 }

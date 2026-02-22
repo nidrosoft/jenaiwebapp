@@ -69,7 +69,7 @@ export const updateExecutiveSchema = z.object({
   phones: z.array(phoneEntrySchema).optional(),
   main_office_location: z.string().max(255).optional().nullable(),
   office_address: addressSchema.optional().nullable(),
-  home_address: addressSchema.optional().nullable(),
+  home_address: z.union([addressSchema, z.string().max(500)]).optional().nullable(),
   timezone: z.string().optional(),
   avatar_url: z.string().url().optional().nullable(),
   bio: z.string().max(2000).optional().nullable(),

@@ -1,6 +1,6 @@
 /**
  * Task Tools
- * AI tools for task management
+ * AI tools for task management — wired to real Supabase data
  */
 
 import { z } from 'zod';
@@ -44,9 +44,38 @@ registerTool({
   parameters: getTasksParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = getTasksParams.parse(params);
+    const { supabase, orgId } = context;
+    const execId = validated.executiveId || context.executiveId;
+
+    let query = supabase
+      .from('tasks')
+      .select('id, title, description, status, priority, category, due_date, due_time, assigned_to, executive_id, created_at')
+      .eq('org_id', orgId)
+      .is('deleted_at', null)
+      .order('priority', { ascending: false })
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(validated.limit);
+
+    if (validated.status !== 'all') {
+      query = query.eq('status', validated.status);
+    }
+    if (validated.priority !== 'all') {
+      query = query.eq('priority', validated.priority);
+    }
+    if (execId) {
+      query = query.eq('executive_id', execId);
+    }
+    if (validated.dueWithinDays) {
+      const futureDate = new Date(Date.now() + validated.dueWithinDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      query = query.lte('due_date', futureDate);
+    }
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Tasks retrieved', params: validated },
+      data: { tasks: data || [], count: data?.length || 0 },
     };
   },
 });
@@ -57,9 +86,29 @@ registerTool({
   parameters: createTaskParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = createTaskParams.parse(params);
+    const { supabase, orgId, userId } = context;
+    const execId = validated.executiveId || context.executiveId;
+
+    const { data, error } = await supabase.from('tasks').insert({
+      org_id: orgId,
+      title: validated.title,
+      description: validated.description,
+      priority: validated.priority,
+      category: validated.category,
+      due_date: validated.dueDate,
+      due_time: validated.dueTime,
+      executive_id: execId,
+      related_meeting_id: validated.relatedMeetingId,
+      created_by: userId,
+      assigned_to: userId,
+      status: 'open',
+    }).select('id, title, priority, status, due_date').single();
+
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Task created', task: validated },
+      data: { task: data, message: `Task "${validated.title}" created` },
     };
   },
 });
@@ -70,9 +119,27 @@ registerTool({
   parameters: updateTaskParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = updateTaskParams.parse(params);
+    const { supabase, orgId } = context;
+
+    const updates: Record<string, unknown> = {};
+    if (validated.status) updates.status = validated.status;
+    if (validated.priority) updates.priority = validated.priority;
+    if (validated.dueDate) updates.due_date = validated.dueDate;
+    if (validated.title) updates.title = validated.title;
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(updates)
+      .eq('id', validated.taskId)
+      .eq('org_id', orgId)
+      .select('id, title, status, priority, due_date')
+      .single();
+
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Task updated', taskId: validated.taskId },
+      data: { task: data, message: `Task updated` },
     };
   },
 });
@@ -83,9 +150,24 @@ registerTool({
   parameters: completeTaskParams,
   execute: async (params, context): Promise<ToolResult> => {
     const validated = completeTaskParams.parse(params);
+    const { supabase, orgId } = context;
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', validated.taskId)
+      .eq('org_id', orgId)
+      .select('id, title')
+      .single();
+
+    if (error) return { success: false, error: error.message };
+
     return {
       success: true,
-      data: { message: 'Task completed', taskId: validated.taskId },
+      data: { task: data, message: `Task "${data?.title}" marked as completed` },
     };
   },
 });

@@ -124,7 +124,9 @@ async function handlePatch(
       updatePayload.office_address = office_address ? JSON.stringify(office_address) : null;
     }
     if (home_address !== undefined) {
-      updatePayload.home_address = home_address ? JSON.stringify(home_address) : null;
+      updatePayload.home_address = home_address
+        ? (typeof home_address === 'string' ? home_address : JSON.stringify(home_address))
+        : null;
     }
 
     const { data, error } = await supabase

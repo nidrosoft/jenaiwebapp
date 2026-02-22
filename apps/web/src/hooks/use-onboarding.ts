@@ -102,16 +102,16 @@ export function useOnboarding() {
     }));
   }, []);
 
-  const completeOnboarding = useCallback(async () => {
+  const completeOnboarding = useCallback(async (): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
-    
+
     const supabase = createClient();
-    
+
     try {
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError || !user) {
         throw new Error('Not authenticated. Please sign in again.');
       }
@@ -129,7 +129,7 @@ export function useOnboarding() {
       if (isInvitedUser) {
         // Invited user - just update their profile
         orgId = existingProfile.org_id;
-        
+
         const { error: updateError } = await supabase
           .from('users')
           .update({
@@ -200,7 +200,7 @@ export function useOnboarding() {
 
       // 3. Create executive profiles (for both new and invited users)
       const validExecutives = data.executives.filter(exec => exec.fullName.trim());
-      
+
       if (validExecutives.length > 0) {
         const executivesToInsert = validExecutives.map(exec => ({
           org_id: orgId,
@@ -238,14 +238,16 @@ export function useOnboarding() {
         }
       }
 
-      // Success! Redirect to dashboard
-      router.push('/dashboard');
-      
+      // Success! Use replace so browser back-button won't return to onboarding
+      setIsLoading(false);
+      router.replace('/dashboard');
+      return true;
+
     } catch (err) {
       console.error('Onboarding error:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
       setIsLoading(false);
+      return false;
     }
   }, [data, router]);
 

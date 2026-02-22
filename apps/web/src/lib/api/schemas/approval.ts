@@ -17,12 +17,13 @@ export const approvalAttachmentSchema = z.object({
 
 export const createApprovalSchema = z.object({
   title: z.string().min(1).max(255),
-  description: z.string().min(1).max(5000),
+  description: z.string().max(5000).optional(),
   approval_type: approvalTypeSchema,
   urgency: approvalUrgencySchema.default('medium'),
   amount: z.number().positive().optional(),
-  currency: z.string().length(3).default('USD'),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  currency: z.string().max(10).default('USD'),
+  category: z.string().max(100).optional(),
+  due_date: z.string().optional(),
   executive_id: z.string().uuid(),
   attachments: z.array(approvalAttachmentSchema).default([]),
 });

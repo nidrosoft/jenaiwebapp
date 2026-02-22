@@ -52,3 +52,17 @@ coverage
 # Supabase
 supabase/.branches
 supabase/.temp
+
+# Secrets / env files
+env
+
+# Screenshots and images (non-asset)
+*.png
+!apps/web/public/**/*.png
+!apps/web/src/app/icon.png
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Misc
+jenniferai-client-feedback-issues.md

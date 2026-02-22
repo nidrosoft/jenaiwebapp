@@ -24,6 +24,13 @@ export const sidebarNavigation: NavItem[] = [
     tier: 'core',
   },
   {
+    id: 'ask-jenifer',
+    label: 'Ask Jenifer',
+    icon: 'Stars01',
+    path: '/ask-jenifer',
+    tier: 'core',
+  },
+  {
     id: 'scheduling',
     label: 'Scheduling',
     icon: 'Calendar',
@@ -104,17 +111,10 @@ export const sidebarNavigation: NavItem[] = [
   },
   {
     id: 'team',
-    label: 'Team',
+    label: 'Executives',
     icon: 'UserCircle',
-    path: '/team',
+    path: '/team/executives',
     tier: 'core',
-    children: [
-      {
-        label: 'Executives',
-        icon: 'Briefcase',
-        path: '/team/executives',
-      },
-    ],
   },
   {
     id: 'events',

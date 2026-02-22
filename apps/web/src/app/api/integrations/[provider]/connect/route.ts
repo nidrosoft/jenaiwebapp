@@ -36,6 +36,10 @@ const OAUTH_CONFIGS: Record<string, { authUrl: string; scopes: string[] }> = {
     authUrl: 'https://slack.com/oauth/v2/authorize',
     scopes: ['channels:read', 'chat:write', 'users:read'],
   },
+  zoom: {
+    authUrl: 'https://zoom.us/oauth/authorize',
+    scopes: ['meeting:read', 'meeting:write', 'user:read'],
+  },
 };
 
 async function handleGet(
@@ -50,13 +54,20 @@ async function handleGet(
     return badRequestResponse(`Unsupported provider: ${provider}`);
   }
 
+  // Allow custom redirect URL via query param (for onboarding flow)
+  const { searchParams } = new URL(request.url);
+  const customRedirect = searchParams.get('redirect');
+  const redirectUrl = customRedirect
+    ? `${process.env.NEXT_PUBLIC_APP_URL}${customRedirect}`
+    : `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=integrations`;
+
   // Build OAuth state
   const state = Buffer.from(
     JSON.stringify({
       provider,
       user_id: context.user.id,
       org_id: context.user.org_id,
-      redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=integrations`,
+      redirect_url: redirectUrl,
     })
   ).toString('base64');
 
@@ -81,6 +92,11 @@ async function handleGet(
     params_obj.set('client_id', process.env.SLACK_CLIENT_ID!);
     params_obj.set('redirect_uri', process.env.SLACK_REDIRECT_URI!);
     params_obj.set('scope', config.scopes.join(','));
+    params_obj.set('state', state);
+  } else if (provider === 'zoom') {
+    params_obj.set('client_id', process.env.ZOOM_CLIENT_ID!);
+    params_obj.set('redirect_uri', process.env.ZOOM_REDIRECT_URI!);
+    params_obj.set('response_type', 'code');
     params_obj.set('state', state);
   }
 

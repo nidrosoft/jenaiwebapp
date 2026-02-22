@@ -15,6 +15,7 @@ import {
   LifeBuoy01,
   MessageChatCircle,
   PieChart03,
+  Stars01,
   Users01,
   UserSquare,
 } from "@untitledui/icons";
@@ -30,6 +31,11 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             label: "Dashboard",
             href: "/dashboard",
             icon: HomeLine,
+          },
+          {
+            label: "Ask Jenifer",
+            href: "/ask-jenifer",
+            icon: Stars01,
           },
           {
             label: "Scheduling",
@@ -68,7 +74,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             ],
           },
           {
-            label: "Team",
+            label: "Executives",
             href: "/team/executives",
             icon: Users01,
           },

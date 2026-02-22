@@ -31,6 +31,7 @@ export const createContactSchema = z.object({
   assistant_name: z.string().max(255).optional(),
   assistant_email: z.string().email().optional(),
   linkedin_url: z.string().url().optional(),
+  birthday: z.string().max(10).optional(),
 });
 
 export const updateContactSchema = z.object({
@@ -52,6 +53,7 @@ export const updateContactSchema = z.object({
   twitter_url: z.string().url().optional().nullable(),
   last_contacted_at: z.string().datetime().optional().nullable(),
   next_followup_at: z.string().datetime().optional().nullable(),
+  birthday: z.string().max(10).optional().nullable(),
 });
 
 export const contactQuerySchema = z.object({
@@ -66,6 +68,31 @@ export const contactQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// ---------------------------------------------------------------------------
+// Bulk import schemas
+// ---------------------------------------------------------------------------
+
+/** Single contact in a bulk import — company defaults to 'Unknown' */
+const importContactSchema = createContactSchema.extend({
+  company: z.string().max(255).default('Unknown'),
+});
+
+export const bulkImportContactSchema = z.object({
+  contacts: z.array(importContactSchema).min(1).max(50),
+  skip_duplicates: z.boolean().default(true),
+  update_duplicates: z.boolean().default(false),
+});
+
+export const checkDuplicatesSchema = z.object({
+  emails: z.array(z.string().email()).min(1).max(500),
+});
+
+// ---------------------------------------------------------------------------
+// Inferred types
+// ---------------------------------------------------------------------------
+
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 export type ContactQueryInput = z.infer<typeof contactQuerySchema>;
+export type BulkImportContactInput = z.infer<typeof bulkImportContactSchema>;
+export type CheckDuplicatesInput = z.infer<typeof checkDuplicatesSchema>;

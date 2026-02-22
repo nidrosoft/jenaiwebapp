@@ -20,6 +20,7 @@ const updateProfileSchema = z.object({
   timezone: z.string().optional(),
   job_title: z.string().max(255).optional().nullable(),
   phone: z.string().max(50).optional().nullable(),
+  phone_extension: z.string().max(20).optional().nullable(),
   preferences: z.object({
     theme: z.enum(['light', 'dark', 'system']).optional(),
     notifications: z.object({

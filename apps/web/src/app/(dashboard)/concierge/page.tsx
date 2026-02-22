@@ -69,6 +69,12 @@ export default function ConciergePage() {
 
   const handleAddService = useCallback(async (serviceData: Omit<Service, "id">) => {
     try {
+      // Auto-prefix https:// if website doesn't have a protocol
+      let website = serviceData.website;
+      if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+        website = `https://${website}`;
+      }
+
       const createData: CreateConciergeServiceData = {
         name: serviceData.name,
         description: serviceData.description,
@@ -76,7 +82,7 @@ export default function ConciergePage() {
         contact_name: serviceData.contact,
         phone: serviceData.phone,
         address: serviceData.address,
-        website: serviceData.website,
+        website: website || undefined,
         rating: serviceData.rating,
         notes: serviceData.notes,
         tags: serviceData.tags,
