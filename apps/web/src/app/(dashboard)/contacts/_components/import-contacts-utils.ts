@@ -288,7 +288,28 @@ export function mapRowToContact(
   if (!contact.company) contact.company = defaults.company || 'Unknown';
   if (!contact.category) contact.category = defaults.category || 'client';
 
-  return contact as MappedContact;
+  const mapped: MappedContact = {
+    full_name: String(contact.full_name ?? ''),
+    email: String(contact.email ?? ''),
+    company: String(contact.company ?? 'Unknown'),
+    category: String(contact.category ?? 'client'),
+  };
+
+  if (contact.title) mapped.title = String(contact.title);
+  if (contact.phone) mapped.phone = String(contact.phone);
+  if (contact.mobile) mapped.mobile = String(contact.mobile);
+  if (Array.isArray(contact.tags)) mapped.tags = contact.tags as string[];
+  if (contact.relationship_notes) mapped.relationship_notes = String(contact.relationship_notes);
+  if (contact.linkedin_url) mapped.linkedin_url = String(contact.linkedin_url);
+  if (contact.assistant_name) mapped.assistant_name = String(contact.assistant_name);
+  if (contact.assistant_email) mapped.assistant_email = String(contact.assistant_email);
+  if (contact.address_line1) mapped.address_line1 = String(contact.address_line1);
+  if (contact.city) mapped.city = String(contact.city);
+  if (contact.state) mapped.state = String(contact.state);
+  if (contact.postal_code) mapped.postal_code = String(contact.postal_code);
+  if (contact.country) mapped.country = String(contact.country);
+
+  return mapped;
 }
 
 export function validateMappedContact(
