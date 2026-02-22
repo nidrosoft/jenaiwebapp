@@ -1357,11 +1357,11 @@ function TeamTab() {
             <div className="mt-5 flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
-                <Input size="sm" value={editName} onChange={(val) => setEditName(typeof val === 'string' ? val : (val?.target as HTMLInputElement)?.value ?? '')} />
+                <Input size="sm" value={editName} onChange={(val: string) => setEditName(val)} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Job Title</label>
-                <Input size="sm" value={editJobTitle} onChange={(val) => setEditJobTitle(typeof val === 'string' ? val : (val?.target as HTMLInputElement)?.value ?? '')} placeholder="e.g., Executive Assistant" />
+                <Input size="sm" value={editJobTitle} onChange={(val: string) => setEditJobTitle(val)} placeholder="e.g., Executive Assistant" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
