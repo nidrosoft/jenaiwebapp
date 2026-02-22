@@ -412,7 +412,7 @@ export default function DelegationsPage() {
             placeholder="Search delegations..."
             icon={SearchLg}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(typeof e === 'string' ? e : (e?.target as HTMLInputElement)?.value ?? '')}
+            onChange={(val: string) => setSearchQuery(val)}
           />
         </div>
       </div>
