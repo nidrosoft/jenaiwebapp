@@ -41,7 +41,7 @@ async function handleGet(request: NextRequest, context: AuthContext) {
     // Fetch subscription from Stripe
     const subscription = await stripe.subscriptions.retrieve(org.stripe_subscription_id, {
       expand: ['default_payment_method', 'items.data.price.product'],
-    });
+    }) as Stripe.Subscription;
 
     // Get payment method details
     let paymentMethod = null;
@@ -62,12 +62,17 @@ async function handleGet(request: NextRequest, context: AuthContext) {
     const price = item?.price;
     const product = price?.product as Stripe.Product | undefined;
 
+    // Stripe v20 removed current_period_end from the Subscription type,
+    // but it's still returned in the API response at runtime
+    const subData = subscription as unknown as Record<string, unknown>;
+    const periodEnd = typeof subData.current_period_end === 'number'
+      ? new Date(subData.current_period_end * 1000).toISOString()
+      : null;
+
     return successResponse({
       plan: product?.name || org.subscription_tier || 'pro',
       status: subscription.status,
-      current_period_end: subscription.current_period_end
-        ? new Date(subscription.current_period_end * 1000).toISOString()
-        : null,
+      current_period_end: periodEnd,
       cancel_at_period_end: subscription.cancel_at_period_end,
       payment_method: paymentMethod,
       price_amount: price?.unit_amount ? price.unit_amount / 100 : null,
