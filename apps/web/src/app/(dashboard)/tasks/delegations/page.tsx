@@ -498,7 +498,7 @@ export default function DelegationsPage() {
                       />
                     )}
                     <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} onClick={() => handleEditDelegation(delegation)} />
-                    <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} onClick={() => promptDeleteDelegation(delegation.id, delegation.task_title || delegation.notes)} />
+                    <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} onClick={() => promptDeleteDelegation(delegation.id, delegation.task || delegation.message)} />
                   </div>
                   <div className="flex items-center justify-end lg:hidden">
                     <TableRowActionsDropdown />
