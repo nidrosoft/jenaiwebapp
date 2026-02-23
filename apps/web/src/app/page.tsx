@@ -120,7 +120,7 @@ export default function AuthPage() {
                             console.warn('Error accepting invitation:', err);
                         }
                     }
-                    router.push('/onboarding');
+                    window.location.href = '/onboarding';
                 }
             } else {
                 const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -147,7 +147,7 @@ export default function AuthPage() {
                                 method: 'POST',
                             });
                             if (acceptResponse.ok) {
-                                router.push('/onboarding');
+                                window.location.href = '/onboarding';
                                 return;
                             }
                         } catch (err) {
@@ -156,17 +156,25 @@ export default function AuthPage() {
                     }
                     
                     // Check onboarding status
-                    const { data: profile } = await supabase
-                        .from('users')
-                        .select('onboarding_completed')
-                        .eq('id', data.user.id)
-                        .single();
-                    
-                    if (profile?.onboarding_completed) {
-                        router.push('/dashboard');
-                    } else {
-                        router.push('/onboarding');
+                    try {
+                        const { data: profile } = await supabase
+                            .from('users')
+                            .select('onboarding_completed')
+                            .eq('id', data.user.id)
+                            .single();
+                        
+                        // Use window.location.href for a full page reload so
+                        // auth cookies are properly sent to the middleware
+                        if (profile?.onboarding_completed) {
+                            window.location.href = '/dashboard';
+                        } else {
+                            window.location.href = '/onboarding';
+                        }
+                    } catch {
+                        // If profile query fails, default to dashboard
+                        window.location.href = '/dashboard';
                     }
+                    return;
                 }
             }
         } catch (err) {
