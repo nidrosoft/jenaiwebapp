@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/traffic-check",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/key-date-scan",
