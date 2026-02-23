@@ -40,6 +40,7 @@ export function UploadStep({ parsed, onParsed, error, onError }: UploadStepProps
         <h3 className="text-sm font-semibold text-primary">Upload CSV File</h3>
         <p className="mt-1 text-sm text-tertiary">
           Upload a CSV or TSV file exported from your previous contact management tool.
+          We&apos;ll auto-detect your columns and let you map them in the next step.
         </p>
       </div>
 
@@ -73,6 +74,41 @@ export function UploadStep({ parsed, onParsed, error, onError }: UploadStepProps
           </div>
         </div>
       )}
+
+      {/* Instructions */}
+      <div className="rounded-lg border border-secondary bg-secondary/30 px-4 py-3.5">
+        <p className="text-xs font-semibold text-secondary mb-2">What to know before uploading</p>
+        <ul className="space-y-1.5 text-xs text-tertiary">
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Required fields:</span> Full Name and Email. All other fields are optional.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Column names don&apos;t need to match exactly</span> — we&apos;ll auto-detect common headers and you can adjust the mapping in the next step.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Supported fields:</span> Name, Email, Company, Job Title, Phone, Mobile, Category, Tags, Notes, LinkedIn, Assistant Name, Assistant Email, Address, City, State, Zip, Country.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Categories:</span> VIP, Client, Vendor, Partner, Personal, Colleague, or Other. Unrecognized categories (e.g. &quot;Executive&quot;, &quot;Media&quot;) are automatically mapped to the closest match.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Tags:</span> Separate multiple tags with commas (e.g. &quot;VIP, Board Member, Keynote Speaker&quot;).</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Duplicates:</span> Contacts with matching emails will be flagged — you can skip or update them.</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="mt-0.5 text-brand-500">&#x2022;</span>
+            <span><span className="font-medium text-secondary">Limit:</span> Up to 50 contacts per import. Max file size 5 MB.</span>
+          </li>
+        </ul>
+      </div>
     </div>
   );
 }

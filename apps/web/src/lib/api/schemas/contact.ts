@@ -72,9 +72,25 @@ export const contactQuerySchema = z.object({
 // Bulk import schemas
 // ---------------------------------------------------------------------------
 
-/** Single contact in a bulk import — company defaults to 'Unknown' */
-const importContactSchema = createContactSchema.extend({
+/** Single contact in a bulk import — more permissive than createContactSchema */
+const importContactSchema = z.object({
+  full_name: z.string().min(1).max(255),
+  email: z.string().email(),
   company: z.string().max(255).default('Unknown'),
+  category: z.string().max(50).default('other'),
+  title: z.string().max(255).optional(),
+  phone: z.string().max(50).optional(),
+  mobile: z.string().max(50).optional(),
+  tags: z.array(z.string().max(50)).max(10).default([]),
+  relationship_notes: z.string().max(2000).optional(),
+  assistant_name: z.string().max(255).optional(),
+  assistant_email: z.string().max(255).optional(),
+  linkedin_url: z.string().max(500).optional(),
+  address_line1: z.string().max(255).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().max(100).optional(),
+  postal_code: z.string().max(20).optional(),
+  country: z.string().max(100).optional(),
 });
 
 export const bulkImportContactSchema = z.object({

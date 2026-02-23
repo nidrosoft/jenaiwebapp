@@ -47,9 +47,18 @@ async function handlePost(request: NextRequest, context: AuthContext) {
     let failed = 0;
     const errors: { rowIndex: number; message: string }[] = [];
 
+    // Valid categories for the database
+    const validCategories = ['vip', 'client', 'vendor', 'partner', 'personal', 'colleague', 'other'];
+
     for (let i = 0; i < contacts.length; i++) {
       const contact = contacts[i];
       const existingId = existingMap.get(contact.email.toLowerCase());
+
+      // Normalize category to a valid enum value
+      const rawCategory = contact.category || 'other';
+      const category = validCategories.includes(rawCategory)
+        ? rawCategory
+        : 'other';
 
       if (existingId) {
         if (skip_duplicates && !update_duplicates) {
@@ -57,38 +66,20 @@ async function handlePost(request: NextRequest, context: AuthContext) {
           continue;
         }
         if (update_duplicates) {
-          const { address, ...rest } = contact;
-          const updateData: Record<string, unknown> = { ...rest };
-          if (address) {
-            updateData.address_line1 = address.line1;
-            updateData.address_line2 = address.line2 || null;
-            updateData.city = address.city;
-            updateData.state = address.state;
-            updateData.postal_code = address.postal_code;
-            updateData.country = address.country;
-          }
-          toUpdate.push({ id: existingId, data: updateData });
+          toUpdate.push({
+            id: existingId,
+            data: { ...contact, category },
+          });
           continue;
         }
       }
 
-      // Flatten address for insert
-      const { address, ...rest } = contact;
-      const contactData: Record<string, unknown> = {
-        ...rest,
+      toInsert.push({
+        ...contact,
+        category,
         org_id: context.user.org_id,
         created_by: context.user.id,
-      };
-      if (address) {
-        contactData.address_line1 = address.line1;
-        contactData.address_line2 = address.line2 || null;
-        contactData.city = address.city;
-        contactData.state = address.state;
-        contactData.postal_code = address.postal_code;
-        contactData.country = address.country;
-      }
-
-      toInsert.push(contactData);
+      });
     }
 
     // Bulk insert new contacts

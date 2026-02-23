@@ -73,64 +73,73 @@ export function ExecutiveCard({ executive }: ExecutiveCardProps) {
   const colors = departmentColors[executive.department] || defaultColors;
   const DeptIcon = colors.iconComponent || defaultColors.iconComponent;
 
+  const contactRows = [
+    { icon: Mail01, value: executive.email, color: "text-blue-500", placeholder: "No email added" },
+    { icon: Phone01, value: executive.phone, color: "text-emerald-500", placeholder: "No phone added" },
+    { icon: MarkerPin01, value: executive.location, color: "text-amber-500", placeholder: "No location set" },
+  ];
+
   return (
     <Link
       href={`/team/executives/${executive.id}`}
-      className={`group relative block overflow-hidden rounded-2xl border bg-gradient-to-br p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${colors.bg} ${colors.border}`}
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-gradient-to-br shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${colors.bg} ${colors.border}`}
     >
-      {/* Department Icon Badge - Top Right */}
-      <div className={`absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-xl ${colors.icon}`}>
-        <DeptIcon className="h-5 w-5" />
-      </div>
+      {/* Top accent bar */}
+      <div className="h-1 w-full bg-gradient-to-r from-brand-500 to-brand-400 opacity-60 group-hover:opacity-100 transition-opacity" />
 
-      {/* Avatar and Name Section */}
-      <div className="flex items-start gap-4">
-        <div className="relative">
-          <Avatar
-            initials={getInitials(executive.name)}
-            alt={executive.name}
-            size="xl"
-            className="ring-4 ring-white dark:ring-gray-900 shadow-md"
-          />
-          <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900" />
+      <div className="flex flex-1 flex-col p-5">
+        {/* Department Icon Badge - Top Right */}
+        <div className={`absolute top-5 right-4 flex h-9 w-9 items-center justify-center rounded-lg ${colors.icon} shadow-sm`}>
+          <DeptIcon className="h-4.5 w-4.5" />
         </div>
-        <div className="flex-1 min-w-0 pr-10">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
-            {executive.name}
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{executive.title}</p>
-          <span className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${colors.badge}`}>
-            {executive.department}
-          </span>
-        </div>
-      </div>
 
-      {/* Contact Info */}
-      <div className="mt-5 space-y-2.5 border-t border-gray-200/50 dark:border-gray-700/50 pt-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80 shadow-sm">
-            <Mail01 className="h-4 w-4 text-blue-500" />
+        {/* Avatar and Name Section */}
+        <div className="flex items-start gap-3.5">
+          <div className="relative shrink-0">
+            <Avatar
+              initials={getInitials(executive.name)}
+              alt={executive.name}
+              size="lg"
+              className="ring-2 ring-white dark:ring-gray-800 shadow-md"
+            />
+            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-gray-900" />
           </div>
-          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">{executive.email}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80 shadow-sm">
-            <Phone01 className="h-4 w-4 text-emerald-500" />
+          <div className="flex-1 min-w-0 pr-8">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors truncate">
+              {executive.name}
+            </h3>
+            {executive.title ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5 truncate">{executive.title}</p>
+            ) : (
+              <p className="text-sm text-gray-400 dark:text-gray-600 mt-0.5 italic">No title set</p>
+            )}
+            <span className={`mt-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors.badge}`}>
+              {executive.department}
+            </span>
           </div>
-          <span className="text-sm text-gray-600 dark:text-gray-400">{executive.phone}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/80 dark:bg-gray-800/80 shadow-sm">
-            <MarkerPin01 className="h-4 w-4 text-amber-500" />
-          </div>
-          <span className="text-sm text-gray-600 dark:text-gray-400">{executive.location}</span>
-        </div>
-      </div>
 
-      {/* View Profile Link */}
-      <div className="mt-4 flex items-center justify-end text-sm font-medium text-brand-600 dark:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
-        View Profile
-        <ChevronRight className="h-4 w-4 ml-1" />
+        {/* Contact Info */}
+        <div className="mt-4 space-y-2 border-t border-gray-200/60 dark:border-gray-700/40 pt-3.5">
+          {contactRows.map(({ icon: Icon, value, color, placeholder }) => (
+            <div key={placeholder} className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/80 dark:bg-gray-800/60">
+                <Icon className={`h-3.5 w-3.5 ${value ? color : "text-gray-300 dark:text-gray-600"}`} />
+              </div>
+              {value ? (
+                <span className="text-sm text-gray-700 dark:text-gray-300 truncate">{value}</span>
+              ) : (
+                <span className="text-xs text-gray-400 dark:text-gray-600 italic">{placeholder}</span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* View Profile Link */}
+        <div className="mt-auto pt-4 flex items-center justify-end text-xs font-medium text-brand-600 dark:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
+          View Profile
+          <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+        </div>
       </div>
     </Link>
   );
