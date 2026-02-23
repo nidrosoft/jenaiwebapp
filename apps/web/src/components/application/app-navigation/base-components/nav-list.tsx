@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { cx } from "@/utils/cx";
 import type { NavItemDividerType, NavItemType } from "../config";
 import { NavItemBase } from "./nav-item";
@@ -15,9 +14,14 @@ interface NavListProps {
 }
 
 export const NavList = ({ activeUrl, items, className }: NavListProps) => {
-    const [open, setOpen] = useState(false);
-    const activeItem = items.find((item) => item.href === activeUrl || item.items?.some((subItem) => subItem.href === activeUrl));
-    const [currentItem, setCurrentItem] = useState(activeItem);
+    const isActive = (href?: string) => {
+        if (!href || !activeUrl) return false;
+        return activeUrl === href || activeUrl.startsWith(href + "/");
+    };
+
+    const isChildActive = (item: NavItemType | NavItemDividerType) => {
+        return item.items?.some((subItem) => isActive(subItem.href)) ?? false;
+    };
 
     return (
         <ul className={cx("mt-4 flex flex-col px-2 lg:px-4", className)}>
@@ -31,17 +35,14 @@ export const NavList = ({ activeUrl, items, className }: NavListProps) => {
                 }
 
                 if (item.items?.length) {
+                    const hasActiveChild = isChildActive(item);
                     return (
                         <details
                             key={item.label}
-                            open={activeItem?.href === item.href}
+                            open={hasActiveChild}
                             className="appearance-none py-0.5"
-                            onToggle={(e) => {
-                                setOpen(e.currentTarget.open);
-                                setCurrentItem(item);
-                            }}
                         >
-                            <NavItemBase href={item.href} badge={item.badge} icon={item.icon} type="collapsible">
+                            <NavItemBase href={item.href} badge={item.badge} icon={item.icon} type="collapsible" current={hasActiveChild}>
                                 {item.label}
                             </NavItemBase>
 
@@ -53,7 +54,7 @@ export const NavList = ({ activeUrl, items, className }: NavListProps) => {
                                                 href={childItem.href}
                                                 badge={childItem.badge}
                                                 type="collapsible-child"
-                                                current={activeUrl === childItem.href}
+                                                current={isActive(childItem.href)}
                                             >
                                                 {childItem.label}
                                             </NavItemBase>
@@ -72,8 +73,7 @@ export const NavList = ({ activeUrl, items, className }: NavListProps) => {
                             badge={item.badge}
                             icon={item.icon}
                             href={item.href}
-                            current={currentItem?.href === item.href}
-                            open={open && currentItem?.href === item.href}
+                            current={isActive(item.href)}
                         >
                             {item.label}
                         </NavItemBase>

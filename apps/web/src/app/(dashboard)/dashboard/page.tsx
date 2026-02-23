@@ -12,7 +12,9 @@ import type { Task } from "../tasks/_components/task-types";
 import { NewMeetingSlideout, type MeetingFormData } from "../scheduling/_components/new-meeting-slideout";
 import {
   ArrowLeft,
+  BarChartSquare02,
   Calendar,
+  CalendarCheck01,
   Edit01,
   Plus,
   SearchLg,
@@ -456,11 +458,9 @@ export default function DashboardPage() {
             </div>
           ) : activityData.length === 0 || (activitySummary?.total_meetings === 0 && activitySummary?.total_tasks === 0) ? (
             <div className="flex h-60 flex-col items-center justify-center text-center">
-              <img 
-                src="/assets/illustrations/activity.png" 
-                alt="No activity" 
-                className="w-48 h-48 mb-3 object-contain"
-              />
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                <BarChartSquare02 className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
               <p className="text-md font-semibold text-primary">No activity yet</p>
               <p className="text-sm text-tertiary mt-1">
                 Schedule meetings and complete tasks to see your activity here
@@ -536,11 +536,9 @@ export default function DashboardPage() {
 
           {sortedMeetings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <img 
-                src="/assets/illustrations/schedule.png" 
-                alt="No meetings" 
-                className="w-48 h-48 mb-4 object-contain"
-              />
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                <CalendarCheck01 className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
               <p className="text-lg font-semibold text-primary">No meetings scheduled</p>
               <p className="text-sm text-tertiary mt-1">
                 {searchQuery ? "No meetings match your search" : "Your calendar is clear for today"}

@@ -157,7 +157,7 @@ export function ImportContactsModal({
   return (
     <ModalOverlay isOpen={isOpen} onOpenChange={onOpenChange} isDismissable={!isImporting}>
       <Modal className="max-w-3xl">
-        <Dialog className="flex-col !items-stretch">
+        <Dialog className="flex-col !items-stretch rounded-xl bg-primary shadow-xl ring-1 ring-black/5 dark:ring-white/10">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-secondary px-6 py-4">
             <div className="flex items-center gap-3">

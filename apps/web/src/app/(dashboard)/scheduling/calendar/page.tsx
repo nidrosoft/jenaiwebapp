@@ -7,6 +7,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Plus, 
   Calendar as CalendarIcon, 
@@ -78,6 +79,7 @@ interface ConnectedCalendar {
 }
 
 export default function CalendarPage() {
+  const router = useRouter();
   const [view, setView] = useState<"month" | "week" | "day">("month");
   const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
@@ -385,7 +387,9 @@ export default function CalendarPage() {
               </div>
             )}
             
-            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-white/40 py-2.5 text-sm font-medium text-tertiary transition-all hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 dark:border-gray-700 dark:bg-white/[0.02] dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-400">
+            <button 
+              onClick={() => router.push('/settings?tab=integrations')}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-white/40 py-2.5 text-sm font-medium text-tertiary transition-all hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 dark:border-gray-700 dark:bg-white/[0.02] dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-400">
               <CalendarPlus01 className="h-4 w-4" />
               Connect Calendar
             </button>

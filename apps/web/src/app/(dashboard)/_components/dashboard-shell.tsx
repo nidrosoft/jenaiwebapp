@@ -7,6 +7,7 @@
  */
 
 import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import {
   Calendar,
   CheckDone01,
@@ -23,9 +24,12 @@ import { CollapsibleSidebar } from "./collapsible-sidebar";
 import { TopNavHeader } from "./top-nav-header";
 
 export function DashboardShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+
   return (
     <div className="flex min-h-screen bg-primary">
       <CollapsibleSidebar
+        activeUrl={pathname}
         items={[
           {
             label: "Dashboard",
