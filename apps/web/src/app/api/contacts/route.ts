@@ -123,6 +123,25 @@ async function handlePost(request: NextRequest, context: AuthContext) {
       return internalErrorResponse(error.message);
     }
 
+    // Sync birthday → key_dates
+    if (data && body.birthday) {
+      try {
+        await supabase.from('key_dates').insert({
+          org_id: context.user.org_id,
+          title: `${body.full_name}'s Birthday`,
+          date: body.birthday,
+          category: 'birthdays',
+          related_contact_id: data.id,
+          is_recurring: true,
+          recurrence_rule: 'FREQ=YEARLY',
+          reminder_days: [7, 1],
+          tags: [],
+        });
+      } catch (syncErr) {
+        console.error('Birthday sync to key_dates failed:', syncErr);
+      }
+    }
+
     return successResponse({ data }, 201);
   } catch (error) {
     console.error('Unexpected error:', error);

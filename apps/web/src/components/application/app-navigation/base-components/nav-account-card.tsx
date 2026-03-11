@@ -161,6 +161,7 @@ export const NavAccountCard = ({
         <div ref={triggerRef} className="relative flex items-center gap-3 rounded-xl p-3 ring-1 ring-secondary ring-inset">
             <AvatarLabelGroup
                 size="md"
+                src={profile?.avatar_url}
                 initials={initials}
                 title={displayName}
                 subtitle={email}

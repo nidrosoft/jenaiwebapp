@@ -11,6 +11,8 @@ import { getLocalTimeZone, today, CalendarDate } from "@internationalized/date";
 import type { DateValue } from "react-aria-components";
 import {
   Calendar,
+  ChevronDown,
+  ChevronUp,
   Plus,
   Trash01,
 } from "@untitledui/icons";
@@ -54,7 +56,8 @@ let reminderCounter = 0;
 export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defaultStatus }: AddTaskSlideoutProps) {
   const [dueDate, setDueDate] = useState<DateValue | null>(null);
   const [reminders, setReminders] = useState<ReminderEntry[]>([]);
-  const [subtasks, setSubtasks] = useState<Array<{ id: string; title: string }>>([]);
+  const [subtasks, setSubtasks] = useState<Array<{ id: string; title: string; due_date?: string; assigned_to?: string }>>([]);
+  const [expandedSubtaskId, setExpandedSubtaskId] = useState<string | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
   const [executiveOptions, setExecutiveOptions] = useState<{ label: string; value: string }[]>([]);
   const [teamMemberOptions, setTeamMemberOptions] = useState<{ label: string; value: string }[]>([]);
@@ -64,7 +67,7 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defa
   // Initialize subtasks from editTask
   useEffect(() => {
     if (isOpen && editTask?.subtasks) {
-      setSubtasks(editTask.subtasks.map(st => ({ id: st.id, title: st.title })));
+      setSubtasks(editTask.subtasks.map(st => ({ id: st.id, title: st.title, due_date: (st as any).due_date, assigned_to: (st as any).assigned_to })));
     } else if (isOpen && !editTask) {
       setSubtasks([]);
     }
@@ -94,16 +97,45 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defa
 
     const fetchTeamMembers = async () => {
       try {
-        const response = await fetch('/api/settings/team');
-        if (response.ok) {
-          const result = await response.json();
-          const list = result.data?.data ?? result.data ?? [];
-          setTeamMemberOptions(
-            Array.isArray(list) ? list.filter((m: any) => m.is_active !== false).map((m: any) => ({ label: m.full_name || m.email, value: m.full_name || m.email })) : []
-          );
+        const [teamRes, contactsRes] = await Promise.all([
+          fetch('/api/settings/team'),
+          fetch('/api/contacts?page_size=100'),
+        ]);
+        const teamOptions: { label: string; value: string }[] = [];
+        const contactOptions: { label: string; value: string }[] = [];
+
+        if (teamRes.ok) {
+          const teamResult = await teamRes.json();
+          const members = teamResult.data?.data?.members ?? teamResult.data?.members ?? teamResult.data ?? [];
+          if (Array.isArray(members)) {
+            members.filter((m: any) => m.is_active !== false).forEach((m: any) => {
+              teamOptions.push({ label: `${m.full_name || m.email}`, value: m.id });
+            });
+          }
         }
+
+        if (contactsRes.ok) {
+          const contactResult = await contactsRes.json();
+          const contacts = contactResult.data?.data ?? contactResult.data ?? [];
+          if (Array.isArray(contacts)) {
+            contacts.forEach((c: any) => {
+              contactOptions.push({ label: `${c.full_name}${c.company ? ` (${c.company})` : ''}`, value: `contact:${c.id}` });
+            });
+          }
+        }
+
+        const combined: { label: string; value: string }[] = [];
+        if (teamOptions.length > 0) {
+          combined.push({ label: '── Team Members ──', value: '_header_team' });
+          combined.push(...teamOptions);
+        }
+        if (contactOptions.length > 0) {
+          combined.push({ label: '── Contacts ──', value: '_header_contacts' });
+          combined.push(...contactOptions);
+        }
+        setTeamMemberOptions(combined);
       } catch (err) {
-        console.error('Failed to fetch team members:', err);
+        console.error('Failed to fetch assignable people:', err);
       }
     };
 
@@ -171,6 +203,10 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defa
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     
+    const assignedToRaw = formData.get("assigned_to") as string;
+    // Contact IDs are prefixed with "contact:" to distinguish from user UUIDs
+    const assignedTo = assignedToRaw && !assignedToRaw.startsWith('_header_') ? assignedToRaw : undefined;
+
     const task = {
       title: formData.get("title") as string,
       description: formData.get("description") as string,
@@ -179,6 +215,7 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defa
       category: formData.get("category") as string,
       dueDate: dueDate ? dueDate.toString() : "",
       executive: formData.get("executive") as string,
+      assignedTo,
       comments: 0,
       attachments: 0,
       subtasks: subtasks.map(st => ({
@@ -186,6 +223,8 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defa
         title: st.title,
         completed: editTask?.subtasks?.find(es => es.id === st.id)?.completed ?? false,
         completed_at: editTask?.subtasks?.find(es => es.id === st.id)?.completed_at ?? null,
+        due_date: st.due_date,
+        assigned_to: st.assigned_to,
       })),
     };
 
@@ -366,18 +405,65 @@ export function AddTaskSlideout({ isOpen, onOpenChange, onSubmit, editTask, defa
               {subtasks.length > 0 && (
                 <div className="flex flex-col gap-2">
                   {subtasks.map((st, idx) => (
-                    <div key={st.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
-                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
-                        {idx + 1}
-                      </span>
-                      <span className="flex-1 text-sm text-gray-900 dark:text-white">{st.title}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeSubtask(st.id)}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-error-500 dark:hover:bg-gray-700"
-                      >
-                        <Trash01 className="h-3.5 w-3.5" />
-                      </button>
+                    <div key={st.id} className="rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
+                      <div className="flex items-center gap-2 px-3 py-2">
+                        <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
+                          {idx + 1}
+                        </span>
+                        <span className="flex-1 text-sm text-gray-900 dark:text-white">
+                          {st.title}
+                          {(st.due_date || st.assigned_to) && (
+                            <span className="ml-2 text-xs text-gray-400">
+                              {st.due_date && `Due: ${st.due_date}`}
+                              {st.due_date && st.assigned_to && ' · '}
+                              {st.assigned_to && `Assigned`}
+                            </span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSubtaskId(expandedSubtaskId === st.id ? null : st.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                          title="Advanced settings"
+                        >
+                          {expandedSubtaskId === st.id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeSubtask(st.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-200 hover:text-error-500 dark:hover:bg-gray-700"
+                        >
+                          <Trash01 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {expandedSubtaskId === st.id && (
+                        <div className="border-t border-gray-200 px-3 py-2.5 dark:border-gray-700">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Due Date</label>
+                              <input
+                                type="date"
+                                value={st.due_date || ''}
+                                onChange={(e) => setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, due_date: e.target.value || undefined } : s))}
+                                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Assigned To</label>
+                              <select
+                                value={st.assigned_to || ''}
+                                onChange={(e) => setSubtasks(prev => prev.map(s => s.id === st.id ? { ...s, assigned_to: e.target.value || undefined } : s))}
+                                className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                              >
+                                <option value="">None</option>
+                                {teamMemberOptions.filter(o => !o.value.startsWith('_header_')).map(o => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -52,6 +52,16 @@ export const sidebarNavigation: NavItem[] = [
         icon: 'MapPin',
         path: '/scheduling/route-planner',
       },
+      {
+        label: 'Meeting Tracker',
+        icon: 'BarChart',
+        path: '/scheduling/meeting-tracker',
+      },
+      {
+        label: 'Time Zones',
+        icon: 'Globe',
+        path: '/scheduling/time-zones',
+      },
     ],
   },
   {

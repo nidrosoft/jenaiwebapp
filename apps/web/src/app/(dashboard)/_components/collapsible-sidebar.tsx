@@ -220,6 +220,7 @@ export const CollapsibleSidebar = ({
           <div className="relative flex items-center gap-3 rounded-xl p-3 pr-10 ring-1 ring-secondary ring-inset">
             <AvatarLabelGroup
               size="md"
+              src={profile?.avatar_url}
               initials={userInitials}
               title={userDisplayName}
               subtitle={userEmail}
@@ -352,6 +353,7 @@ export const CollapsibleSidebar = ({
               <AvatarLabelGroup
                 status="online"
                 size="md"
+                src={profile?.avatar_url}
                 initials={userInitials}
                 title={userDisplayName}
                 subtitle={userEmail}

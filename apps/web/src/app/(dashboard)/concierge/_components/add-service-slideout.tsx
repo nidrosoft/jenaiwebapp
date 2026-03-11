@@ -2,10 +2,10 @@
 
 /**
  * AddServiceSlideout Component
- * Slideout panel for adding new concierge services
+ * Slideout panel for adding/editing concierge services
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Phone01,
   Globe02,
@@ -27,6 +27,7 @@ interface AddServiceSlideoutProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit?: (service: Omit<Service, "id">) => void;
+  editService?: Service | null;
 }
 
 const categoryOptions = [
@@ -49,10 +50,22 @@ const ratingOptions = [
   { label: "★★★★★", value: "5" },
 ];
 
-export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServiceSlideoutProps) {
+export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit, editService }: AddServiceSlideoutProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
+
+  // Pre-fill when editing
+  useEffect(() => {
+    if (editService) {
+      setTags(editService.tags || []);
+      setIsFavorite(editService.isFavorite ?? false);
+    } else {
+      setTags([]);
+      setTagInput("");
+      setIsFavorite(false);
+    }
+  }, [editService]);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
@@ -107,8 +120,8 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
         {/* Header */}
         <div className="relative w-full border-b border-secondary px-4 py-4 md:px-6">
           <CloseButton className="absolute top-4 right-4" onClick={() => onOpenChange(false)} />
-          <h2 className="text-lg font-semibold text-primary">Add Service</h2>
-          <p className="text-sm text-tertiary">Add a new concierge service to your directory</p>
+          <h2 className="text-lg font-semibold text-primary">{editService ? "Edit Service" : "Add Service"}</h2>
+          <p className="text-sm text-tertiary">{editService ? "Update this concierge service" : "Add a new concierge service to your directory"}</p>
         </div>
 
         {/* Content */}
@@ -125,6 +138,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                 size="sm"
                 icon={Building07}
                 placeholder="e.g., The French Laundry, Four Seasons"
+                defaultValue={editService?.name}
                 isRequired
               />
             </div>
@@ -139,7 +153,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                   id="category"
                   name="category"
                   options={categoryOptions}
-                  defaultValue="restaurants"
+                  defaultValue={editService?.category || "restaurants"}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -150,7 +164,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                   id="rating"
                   name="rating"
                   options={ratingOptions}
-                  defaultValue="0"
+                  defaultValue={editService?.rating?.toString() || "0"}
                 />
               </div>
             </div>
@@ -165,6 +179,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                 name="description"
                 rows={2}
                 required
+                defaultValue={editService?.description}
                 placeholder="Brief description of the service..."
                 className="w-full rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary placeholder:text-quaternary focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
               />
@@ -181,6 +196,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                 size="sm"
                 icon={User01}
                 placeholder="e.g., Reservations Team, VIP Concierge"
+                defaultValue={editService?.contact}
               />
             </div>
 
@@ -196,6 +212,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                   size="sm"
                   icon={Phone01}
                   placeholder="+1 (555) 000-0000"
+                  defaultValue={editService?.phone}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -208,6 +225,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                   size="sm"
                   icon={Globe02}
                   placeholder="example.com"
+                  defaultValue={editService?.website}
                 />
               </div>
             </div>
@@ -223,6 +241,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                 size="sm"
                 icon={MarkerPin01}
                 placeholder="Full address"
+                defaultValue={editService?.address}
               />
             </div>
 
@@ -275,6 +294,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
                 id="notes"
                 name="notes"
                 rows={2}
+                defaultValue={editService?.notes}
                 placeholder="Special instructions, account numbers, preferences..."
                 className="w-full rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary placeholder:text-quaternary focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
               />
@@ -297,7 +317,7 @@ export function AddServiceSlideout({ isOpen, onOpenChange, onSubmit }: AddServic
             Cancel
           </Button>
           <Button type="submit" form="add-service-form" size="md" color="primary">
-            Add Service
+            {editService ? "Save Changes" : "Add Service"}
           </Button>
         </SlideoutMenu.Footer>
       </SlideoutMenu>

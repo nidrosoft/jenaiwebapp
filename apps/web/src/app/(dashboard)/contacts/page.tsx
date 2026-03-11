@@ -40,14 +40,17 @@ const convertToUIContact = (dbContact: DatabaseContact): Contact => ({
   company: dbContact.company,
   title: dbContact.title || "",
   email: dbContact.email,
+  additionalEmails: dbContact.additional_emails || undefined,
   phone: dbContact.phone || "",
   category: dbContact.category as Contact["category"],
   tags: dbContact.tags || undefined,
   notes: dbContact.relationship_notes || undefined,
-  lastContact: dbContact.last_contacted_at 
+  lastContact: dbContact.last_contacted_at
     ? new Date(dbContact.last_contacted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : undefined,
   birthday: (dbContact as any).birthday || undefined,
+  timezone: (dbContact as any).timezone || undefined,
+  linkedinUrl: (dbContact as any).linkedin_url || undefined,
 });
 
 const ITEMS_PER_PAGE = 10;
@@ -178,6 +181,7 @@ export default function ContactsPage() {
       const createData: CreateContactData = {
         full_name: contactData.name,
         email: contactData.email,
+        additional_emails: contactData.additionalEmails?.length ? contactData.additionalEmails : undefined,
         company: contactData.company || "",
         title: contactData.title,
         phone: contactData.phone,
@@ -185,6 +189,8 @@ export default function ContactsPage() {
         tags: contactData.tags,
         relationship_notes: contactData.notes,
         birthday: contactData.birthday,
+        timezone: contactData.timezone,
+        linkedin_url: contactData.linkedinUrl,
       } as any;
 
       await createContact(createData);
@@ -201,12 +207,16 @@ export default function ContactsPage() {
       const updateData: UpdateContactData = {
         full_name: contact.name,
         email: contact.email,
+        additional_emails: contact.additionalEmails?.length ? contact.additionalEmails : null,
         company: contact.company,
         title: contact.title,
         phone: contact.phone,
         category: contact.category,
         tags: contact.tags,
         relationship_notes: contact.notes,
+        birthday: contact.birthday || null,
+        timezone: contact.timezone || null,
+        linkedin_url: contact.linkedinUrl || null,
       };
 
       await updateContact(contact.id, updateData);
@@ -291,6 +301,17 @@ export default function ContactsPage() {
     return counts;
   }, [contacts]);
 
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-tertiary">Loading contacts...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-8">
       {/* Page Header */}
@@ -369,8 +390,17 @@ export default function ContactsPage() {
         <Table
           aria-label="Contacts"
           selectionMode="multiple"
+          selectionBehavior="toggle"
           sortDescriptor={sortDescriptor}
           onSortChange={setSortDescriptor}
+          onRowAction={(key) => {
+            const contact = paginatedContacts.find((c) => c.id === key);
+            if (contact) {
+              setSelectedContact(contact);
+              setSlideoutMode("view");
+              setIsSlideoutOpen(true);
+            }
+          }}
         >
           <Table.Header>
             <Table.Head id="name" label="Name" isRowHeader allowsSorting className="w-full max-w-1/4" />

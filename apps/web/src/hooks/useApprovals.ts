@@ -147,11 +147,12 @@ export function useApprovals(filters?: ApprovalFilters): UseApprovalsReturn {
       }
 
       const result = await response.json();
+      const created = result.data?.data ?? result.data;
       setApprovals(prev => {
         const safePrev = Array.isArray(prev) ? prev : [];
-        return [result.data, ...safePrev];
+        return [created, ...safePrev];
       });
-      return result.data;
+      return created;
     } catch (err) {
       console.error('Error creating approval:', err);
       throw err;
@@ -176,11 +177,12 @@ export function useApprovals(filters?: ApprovalFilters): UseApprovalsReturn {
       }
 
       const result = await response.json();
+      const updated = result.data?.data ?? result.data;
       setApprovals(prev => {
         const safePrev = Array.isArray(prev) ? prev : [];
-        return safePrev.map(a => a.id === id ? result.data : a);
+        return safePrev.map(a => a.id === id ? updated : a);
       });
-      return result.data;
+      return updated;
     } catch (err) {
       console.error('Error updating approval:', err);
       throw err;

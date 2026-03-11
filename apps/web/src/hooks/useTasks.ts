@@ -57,6 +57,7 @@ export interface CreateTaskData {
   related_contact_id?: string;
   is_recurring?: boolean;
   recurrence_rule?: string;
+  folder_id?: string | null;
 }
 
 export interface UpdateTaskData extends Partial<CreateTaskData> {

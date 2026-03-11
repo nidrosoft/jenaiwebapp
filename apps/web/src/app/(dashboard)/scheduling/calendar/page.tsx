@@ -21,7 +21,9 @@ import {
   User01,
   TrendUp01,
   CheckCircle,
+  Clock,
   Plane,
+  BarChartSquare01,
 } from "@untitledui/icons";
 import { Calendar, type CalendarEvent } from "@/components/application/calendar/calendar";
 import { Button } from "@/components/base/buttons/button";
@@ -29,6 +31,9 @@ import { FeaturedIcon } from "@/components/foundations/featured-icon/featured-ic
 import { NewMeetingSlideout, type MeetingFormData } from "../_components/new-meeting-slideout";
 import { AddEventSlideout, type EventFormData } from "../_components/add-event-slideout";
 import { EditMeetingSlideout, type MeetingData } from "../_components/edit-meeting-slideout";
+import { ProposeTimesPanel } from "../_components/propose-times-panel";
+import { ShareAvailabilityModal } from "../_components/share-availability-modal";
+import { CreatePollModal } from "../_components/create-poll-modal";
 import { useCalendarMeetings, type CalendarMeeting } from "@/hooks/useDashboard";
 import { notify } from "@/lib/notifications";
 
@@ -56,10 +61,14 @@ const getMeetingColor = (meetingType: string, locationType: string): CalendarEve
 // Helper function to convert database meeting to calendar event
 const convertToCalendarEvent = (meeting: CalendarMeeting): CalendarEvent => ({
   id: meeting.id,
-  title: meeting.title,
+  title: meeting.status === 'pending' || meeting.status === 'tentative' ? `⏳ ${meeting.title}` : meeting.title,
   start: new Date(meeting.start_time),
   end: new Date(meeting.end_time),
-  color: getMeetingColor(meeting.meeting_type, meeting.location_type),
+  color: meeting.status === 'pending' || meeting.status === 'tentative'
+    ? 'gray'
+    : meeting.status === 'cancelled'
+    ? 'gray'
+    : getMeetingColor(meeting.meeting_type, meeting.location_type),
   dot: meeting.location_type === 'in_person',
   // Extended properties for edit functionality
   location: meeting.location,
@@ -84,6 +93,9 @@ export default function CalendarPage() {
   const [isNewMeetingOpen, setIsNewMeetingOpen] = useState(false);
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
   const [isEditMeetingOpen, setIsEditMeetingOpen] = useState(false);
+  const [isProposeTimesOpen, setIsProposeTimesOpen] = useState(false);
+  const [isShareAvailabilityOpen, setIsShareAvailabilityOpen] = useState(false);
+  const [isPollOpen, setIsPollOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingData | null>(null);
 
   // Fetch meetings from database
@@ -317,6 +329,17 @@ export default function CalendarPage() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-tertiary">Loading calendar...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col gap-6 p-4 lg:p-8">
       {/* Page Header */}
@@ -326,6 +349,15 @@ export default function CalendarPage() {
           <p className="text-sm text-tertiary">Manage schedules for your executives</p>
         </div>
         <div className="flex gap-3">
+          <Button size="md" color="secondary" iconLeading={Clock} onClick={() => setIsProposeTimesOpen(true)}>
+            Propose Times
+          </Button>
+          <Button size="md" color="secondary" iconLeading={Link01} onClick={() => setIsShareAvailabilityOpen(true)}>
+            Share Availability
+          </Button>
+          <Button size="md" color="secondary" iconLeading={BarChartSquare01} onClick={() => setIsPollOpen(true)}>
+            Create Poll
+          </Button>
           <Button size="md" color="secondary" iconLeading={Plus} onClick={() => setIsNewMeetingOpen(true)}>
             New Meeting
           </Button>
@@ -533,6 +565,24 @@ export default function CalendarPage() {
         meeting={selectedMeeting}
         onUpdate={handleUpdateMeeting}
         onDelete={handleDeleteMeeting}
+      />
+
+      {/* Propose Times Panel */}
+      <ProposeTimesPanel
+        isOpen={isProposeTimesOpen}
+        onClose={() => setIsProposeTimesOpen(false)}
+      />
+
+      {/* Share Availability Modal */}
+      <ShareAvailabilityModal
+        isOpen={isShareAvailabilityOpen}
+        onClose={() => setIsShareAvailabilityOpen(false)}
+      />
+
+      {/* Create Poll Modal */}
+      <CreatePollModal
+        isOpen={isPollOpen}
+        onClose={() => setIsPollOpen(false)}
       />
     </div>
   );

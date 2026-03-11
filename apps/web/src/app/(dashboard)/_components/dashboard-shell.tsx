@@ -49,6 +49,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               { label: "Calendar", href: "/scheduling/calendar" },
               { label: "Meeting Log", href: "/scheduling/meeting-log" },
               { label: "Route Planner", href: "/scheduling/route-planner" },
+              { label: "Meeting Tracker", href: "/scheduling/meeting-tracker" },
+              { label: "Time Zones", href: "/scheduling/time-zones" },
             ],
           },
           {

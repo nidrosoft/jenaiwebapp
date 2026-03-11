@@ -35,6 +35,8 @@ export function TaskDetailPanel({ task, onClose, onToggleComplete, onEditTask, o
   const completedSubtasks = subtasks.filter(st => st.completed).length;
 
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState("");
 
   const handleToggleSubtask = useCallback((subtaskId: string) => {
     const updated = subtasks.map(st =>
@@ -61,6 +63,29 @@ export function TaskDetailPanel({ task, onClose, onToggleComplete, onEditTask, o
   const handleDeleteSubtask = useCallback((subtaskId: string) => {
     onSubtasksChange?.(task.id, subtasks.filter(st => st.id !== subtaskId));
   }, [subtasks, task.id, onSubtasksChange]);
+
+  const handleStartEditSubtask = useCallback((subtask: Subtask) => {
+    setEditingSubtaskId(subtask.id);
+    setEditingSubtaskTitle(subtask.title);
+  }, []);
+
+  const handleSaveSubtaskEdit = useCallback(() => {
+    if (!editingSubtaskId || !editingSubtaskTitle.trim()) {
+      setEditingSubtaskId(null);
+      return;
+    }
+    const updated = subtasks.map(st =>
+      st.id === editingSubtaskId ? { ...st, title: editingSubtaskTitle.trim() } : st
+    );
+    onSubtasksChange?.(task.id, updated);
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle("");
+  }, [editingSubtaskId, editingSubtaskTitle, subtasks, task.id, onSubtasksChange]);
+
+  const handleCancelSubtaskEdit = useCallback(() => {
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle("");
+  }, []);
 
   return (
     <div className="hidden w-96 flex-shrink-0 overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 lg:block">
@@ -174,15 +199,43 @@ export function TaskDetailPanel({ task, onClose, onToggleComplete, onEditTask, o
                         </svg>
                       )}
                     </button>
-                    <span className={`flex-1 text-sm ${st.completed ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}>
-                      {st.title}
-                    </span>
-                    <button
-                      onClick={() => handleDeleteSubtask(st.id)}
-                      className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-error-500 group-hover:opacity-100"
-                    >
-                      <Trash01 className="h-3.5 w-3.5" />
-                    </button>
+                    {editingSubtaskId === st.id ? (
+                      <input
+                        type="text"
+                        value={editingSubtaskTitle}
+                        onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveSubtaskEdit();
+                          if (e.key === "Escape") handleCancelSubtaskEdit();
+                        }}
+                        onBlur={handleSaveSubtaskEdit}
+                        autoFocus
+                        className="flex-1 rounded border border-brand-300 bg-white px-2 py-0.5 text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-brand-600 dark:bg-gray-800 dark:text-white"
+                      />
+                    ) : (
+                      <span
+                        className={`flex-1 text-sm cursor-pointer ${st.completed ? 'text-gray-400 line-through' : 'text-gray-700 dark:text-gray-300'}`}
+                        onDoubleClick={() => handleStartEditSubtask(st)}
+                      >
+                        {st.title}
+                      </span>
+                    )}
+                    {editingSubtaskId !== st.id && (
+                      <>
+                        <button
+                          onClick={() => handleStartEditSubtask(st)}
+                          className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-gray-600 group-hover:opacity-100 dark:hover:text-gray-200"
+                        >
+                          <Edit01 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSubtask(st.id)}
+                          className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:text-error-500 group-hover:opacity-100"
+                        >
+                          <Trash01 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

@@ -34,6 +34,7 @@ const updateOrgSchema = z.object({
     default_timezone: z.string().optional(),
     date_format: z.string().optional(),
     time_format: z.enum(['12h', '24h']).optional(),
+    week_starts_on: z.enum(['saturday', 'sunday', 'monday']).optional(),
   }).optional(),
   ai_settings: z.object({
     enabled: z.boolean().optional(),

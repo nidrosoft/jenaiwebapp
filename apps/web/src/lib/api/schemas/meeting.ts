@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 
-export const meetingStatusSchema = z.enum(['scheduled', 'confirmed', 'tentative', 'cancelled']);
+export const meetingStatusSchema = z.enum(['scheduled', 'confirmed', 'tentative', 'pending', 'cancelled']);
 export const locationTypeSchema = z.enum(['virtual', 'in_person', 'phone', 'hybrid']);
 export const meetingTypeSchema = z.enum(['internal', 'external', 'one_on_one', 'team', 'client', 'interview', 'other']);
 export const videoProviderSchema = z.enum(['zoom', 'teams', 'google_meet', 'webex', 'other']);
@@ -56,7 +56,7 @@ export const meetingQuerySchema = z.object({
   executive_id: z.string().uuid().optional(),
   start_date: z.string().datetime().optional(),
   end_date: z.string().datetime().optional(),
-  status: z.enum(['upcoming', 'past', 'all']).default('upcoming'),
+  status: z.enum(['upcoming', 'pending', 'past', 'cancelled', 'all']).default('upcoming'),
   meeting_type: meetingTypeSchema.optional(),
   location_type: locationTypeSchema.optional(),
   search: z.string().optional(),

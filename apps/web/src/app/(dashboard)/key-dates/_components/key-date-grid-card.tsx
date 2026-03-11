@@ -15,7 +15,7 @@ import {
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Avatar } from "@/components/base/avatar/avatar";
 import type { KeyDate, KeyDateCategory } from "./key-dates-data";
-import { getCategoryConfig } from "./key-dates-data";
+import { getCategoryConfig, recurringLabel } from "./key-dates-data";
 
 interface KeyDateGridCardProps {
   keyDate: KeyDate;

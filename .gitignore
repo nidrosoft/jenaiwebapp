@@ -55,6 +55,7 @@ supabase/.temp
 
 # Secrets / env files
 env
+.mcp.json
 
 # Screenshots and images (non-asset)
 *.png

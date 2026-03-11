@@ -43,6 +43,7 @@ export interface DatabaseConciergeService {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  contact_id: string | null;
 }
 
 export interface ConciergeFilters {
@@ -75,6 +76,7 @@ export interface CreateConciergeServiceData {
 
 export interface UpdateConciergeServiceData extends Partial<CreateConciergeServiceData> {
   is_favorite?: boolean;
+  contact_id?: string | null;
 }
 
 interface UseConciergeReturn {

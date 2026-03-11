@@ -10,7 +10,7 @@ export interface KeyDate {
   category: KeyDateCategory;
   description?: string;
   reminder?: number; // days before
-  recurring?: "yearly" | "monthly" | "none";
+  recurring?: "weekly" | "bi_weekly" | "monthly" | "quarterly" | "bi_annual" | "annually" | "none";
   relatedPerson?: string;
 }
 
@@ -55,6 +55,20 @@ export const categories: CategoryConfig[] = [
 
 export const getCategoryConfig = (category: KeyDateCategory): CategoryConfig => {
   return categories.find((c) => c.id === category) || categories[0];
+};
+
+// Display-friendly recurring labels
+export const recurringLabel = (recurring?: string): string => {
+  const labels: Record<string, string> = {
+    weekly: 'Weekly',
+    bi_weekly: 'Bi-Weekly',
+    monthly: 'Monthly',
+    quarterly: 'Quarterly',
+    bi_annual: 'Bi-Annual',
+    annually: 'Annually',
+    yearly: 'Annually',
+  };
+  return labels[recurring || ''] || recurring || '';
 };
 
 // Helper to get dates by category

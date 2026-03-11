@@ -15,6 +15,8 @@ export interface Service {
   notes?: string;
   tags?: string[];
   isFavorite?: boolean;
+  contactId?: string;
+  contactName?: string;
 }
 
 export const categoryIcons: Record<Service["category"], string> = {

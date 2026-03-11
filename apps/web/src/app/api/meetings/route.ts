@@ -69,6 +69,10 @@ async function handleGet(request: NextRequest, context: AuthContext) {
       query = query.gte('start_time', now);
     } else if (filters.status === 'past') {
       query = query.lt('start_time', now);
+    } else if (filters.status === 'pending') {
+      query = query.in('status', ['pending', 'tentative']);
+    } else if (filters.status === 'cancelled') {
+      query = query.eq('status', 'cancelled');
     }
 
     if (filters.start_date) {

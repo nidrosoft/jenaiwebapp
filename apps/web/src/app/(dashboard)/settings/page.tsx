@@ -8,7 +8,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CreditCard02, Plus, SearchLg, RefreshCw01 } from "@untitledui/icons";
+import { CreditCard02, Plus, SearchLg, RefreshCw01, Clock } from "@untitledui/icons";
+import { integrationLogos } from "./_components/integration-logos";
+import { PreferencesTab } from "./_components/preferences-tab";
 import { InviteMemberSlideout, type InviteMemberData } from "./_components/invite-member-slideout";
 import { TabList, Tabs } from "@/components/application/tabs/tabs";
 import { Avatar } from "@/components/base/avatar/avatar";
@@ -16,11 +18,13 @@ import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { Toggle } from "@/components/base/toggle/toggle";
+import { ConfirmationDialog } from "@/components/application/confirmation-dialog/confirmation-dialog";
 import { notify } from "@/lib/notifications";
 
 const tabs = [
   { id: "profile", label: "My Profile" },
   { id: "organization", label: "Organization" },
+  { id: "preferences", label: "Preferences" },
   { id: "integrations", label: "Integrations" },
   { id: "team", label: "Team" },
   { id: "billing", label: "Billing" },
@@ -65,6 +69,7 @@ export default function SettingsPage() {
 
       {selectedTab === "profile" && <ProfileTab />}
       {selectedTab === "organization" && <OrganizationTab />}
+      {selectedTab === "preferences" && <PreferencesTab />}
       {selectedTab === "integrations" && <IntegrationsTab />}
       {selectedTab === "team" && <TeamTab />}
       {selectedTab === "billing" && <BillingTab />}
@@ -872,14 +877,14 @@ const PROVIDER_API_MAP: Record<string, string> = {
   gmail: 'google',
 };
 
-// Available integrations config (static list of supported integrations)
+// Available integrations config — ordered per spec: Outlook → Teams → Zoom → Google Calendar → Gmail → Slack
 const availableIntegrations = [
-  { provider: "google_calendar", name: "Google Calendar", description: "Sync your Google Calendar events and meetings.", logo: "https://www.untitledui.com/logos/integrations/google-calendar.svg", features: ["Two-way calendar sync", "Auto-detect conflicts", "Meeting RSVP management", "Color-coded event categories"] },
-  { provider: "outlook_calendar", name: "Outlook Calendar", description: "Connect Microsoft Outlook for calendar sync.", logo: "https://www.untitledui.com/logos/integrations/outlook.svg", features: ["Outlook 365 calendar sync", "Meeting room booking", "Shared calendar access", "Teams meeting integration"] },
-  { provider: "zoom", name: "Zoom", description: "Create Zoom meetings automatically.", logo: "https://www.untitledui.com/logos/integrations/zoom.svg", features: ["Auto-generate meeting links", "Meeting recording access", "Attendee tracking", "Virtual background management"] },
-  { provider: "teams", name: "Microsoft Teams", description: "Create Teams meetings and send notifications.", logo: "https://www.untitledui.com/logos/integrations/teams.svg", features: ["Teams meeting creation", "Channel notifications", "Presence status sync", "File sharing integration"] },
-  { provider: "slack", name: "Slack", description: "Send notifications to channels.", logo: "https://www.untitledui.com/logos/integrations/slack.svg", features: ["Task notifications", "Daily digest summaries", "Approval request alerts", "Channel-specific routing"] },
-  { provider: "gmail", name: "Gmail", description: "Connect Gmail for email integration.", logo: "https://www.untitledui.com/logos/integrations/gmail.svg", features: ["Email tracking", "Template management", "Contact auto-import", "Thread monitoring"] },
+  { provider: "outlook_calendar", name: "Outlook Calendar", description: "Connect Microsoft Outlook for calendar sync.", features: ["Outlook 365 calendar sync", "Meeting room booking", "Shared calendar access", "Teams meeting integration"] },
+  { provider: "teams", name: "Microsoft Teams", description: "Create Teams meetings and send notifications.", features: ["Teams meeting creation", "Channel notifications", "Presence status sync", "File sharing integration"] },
+  { provider: "zoom", name: "Zoom", description: "Create Zoom meetings automatically.", features: ["Auto-generate meeting links", "Meeting recording access", "Attendee tracking", "Virtual background management"] },
+  { provider: "google_calendar", name: "Google Calendar", description: "Sync your Google Calendar events and meetings.", features: ["Two-way calendar sync", "Auto-detect conflicts", "Meeting RSVP management", "Color-coded event categories"] },
+  { provider: "gmail", name: "Gmail", description: "Connect Gmail for email integration.", comingSoon: true, features: ["Email tracking", "Template management", "Contact auto-import", "Thread monitoring"] },
+  { provider: "slack", name: "Slack", description: "Send notifications to channels.", comingSoon: true, features: ["Task notifications", "Daily digest summaries", "Approval request alerts", "Channel-specific routing"] },
 ];
 
 // Types for integration data
@@ -895,6 +900,7 @@ interface IntegrationData {
 function IntegrationsTab() {
   const [connectedIntegrations, setConnectedIntegrations] = useState<IntegrationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<'all' | 'installed'>('all');
   const [detailIntegration, setDetailIntegration] = useState<(typeof availableIntegrations)[number] | null>(null);
@@ -945,8 +951,13 @@ function IntegrationsTab() {
     window.location.href = `/api/integrations/${apiProvider}/connect`;
   };
 
-  const handleDisconnect = async (provider: string) => {
-    const apiProvider = PROVIDER_API_MAP[provider] || provider;
+  const handleDisconnect = (provider: string) => {
+    setDisconnectTarget(provider);
+  };
+
+  const confirmDisconnect = async () => {
+    if (!disconnectTarget) return;
+    const apiProvider = PROVIDER_API_MAP[disconnectTarget] || disconnectTarget;
     try {
       const response = await fetch(`/api/integrations/${apiProvider}/disconnect`, {
         method: 'POST',
@@ -955,13 +966,15 @@ function IntegrationsTab() {
         setConnectedIntegrations(prev =>
           prev.map(i => i.provider === apiProvider ? { ...i, status: 'revoked' } : i)
         );
-        notify.success('Disconnected', `${provider} has been disconnected.`);
+        notify.success('Disconnected', `${disconnectTarget} has been disconnected.`);
       } else {
         notify.error('Error', 'Failed to disconnect integration.');
       }
     } catch (err) {
       console.error('Failed to disconnect:', err);
       notify.error('Error', 'Failed to disconnect integration.');
+    } finally {
+      setDisconnectTarget(null);
     }
   };
 
@@ -1024,22 +1037,31 @@ function IntegrationsTab() {
         {filteredIntegrations.map((integration) => {
           const connected = isConnected(integration.provider);
           const connectedData = getConnectedData(integration.provider);
+          const LogoComponent = integrationLogos[integration.provider];
+          const isSoon = 'comingSoon' in integration && integration.comingSoon;
           return (
-            <li key={integration.provider} className="rounded-xl bg-primary shadow-xs ring-1 ring-secondary ring-inset">
+            <li key={integration.provider} className={`rounded-xl bg-primary shadow-xs ring-1 ring-secondary ring-inset${isSoon ? ' opacity-75' : ''}`}>
               <div className="flex flex-col gap-4 p-5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white p-1 shadow-xs ring-1 ring-secondary ring-inset">
-                      <img src={integration.logo} alt={integration.name} className="h-8 w-8 object-contain" />
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white p-1 shadow-xs ring-1 ring-secondary ring-inset dark:bg-gray-800">
+                      {LogoComponent ? <LogoComponent /> : <Clock className="h-8 w-8 text-gray-400" />}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-primary">{integration.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-primary">{integration.name}</p>
+                        {isSoon && (
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                            Coming Soon
+                          </span>
+                        )}
+                      </div>
                       {connectedData?.provider_email && (
                         <p className="text-xs text-tertiary">{connectedData.provider_email}</p>
                       )}
                     </div>
                   </div>
-                  {connected && (
+                  {connected && !isSoon && (
                     <span className="rounded-full bg-success-50 px-2 py-0.5 text-xs font-medium text-success-700 dark:bg-success-500/10 dark:text-success-400">Connected</span>
                   )}
                 </div>
@@ -1052,7 +1074,11 @@ function IntegrationsTab() {
                 >
                   Learn more
                 </button>
-                {connected ? (
+                {isSoon ? (
+                  <Button color="secondary" size="sm" isDisabled title="This integration will be available soon">
+                    Coming Soon
+                  </Button>
+                ) : connected ? (
                   <Button color="secondary" size="sm" onClick={() => handleDisconnect(integration.provider)}>
                     Disconnect
                   </Button>
@@ -1073,44 +1099,70 @@ function IntegrationsTab() {
       </ul>
 
       {/* Integration Detail Modal */}
-      {detailIntegration && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setDetailIntegration(null)}>
-          <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 shadow-xs ring-1 ring-gray-200 ring-inset dark:ring-gray-700">
-                <img src={detailIntegration.logo} alt={detailIntegration.name} className="h-10 w-10 object-contain" />
+      {detailIntegration && (() => {
+        const DetailLogo = integrationLogos[detailIntegration.provider];
+        const isDetailSoon = 'comingSoon' in detailIntegration && detailIntegration.comingSoon;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setDetailIntegration(null)}>
+            <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white p-1.5 shadow-xs ring-1 ring-gray-200 ring-inset dark:bg-gray-800 dark:ring-gray-700">
+                  {DetailLogo ? <DetailLogo /> : <Clock className="h-10 w-10 text-gray-400" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{detailIntegration.name}</h3>
+                    {isDetailSoon && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                        Coming Soon
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">{detailIntegration.description}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{detailIntegration.name}</h3>
-                <p className="text-sm text-gray-500">{detailIntegration.description}</p>
+              <div className="mt-5">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Features</h4>
+                <ul className="mt-3 flex flex-col gap-2.5">
+                  {detailIntegration.features?.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2.5 text-sm text-gray-600 dark:text-gray-400">
+                      <span className="mt-0.5 text-success-500">&#10003;</span>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </div>
-            <div className="mt-5">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Features</h4>
-              <ul className="mt-3 flex flex-col gap-2.5">
-                {detailIntegration.features?.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm text-gray-600 dark:text-gray-400">
-                    <span className="mt-0.5 text-success-500">&#10003;</span>
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="mt-6 flex gap-3">
-              <Button size="sm" color="secondary" className="flex-1" onClick={() => setDetailIntegration(null)}>Close</Button>
-              {isConnected(detailIntegration.provider) ? (
-                <Button size="sm" color="secondary" className="flex-1" onClick={() => { handleDisconnect(detailIntegration.provider); setDetailIntegration(null); }}>
-                  Disconnect
-                </Button>
-              ) : (
-                <Button size="sm" color="primary" className="flex-1" onClick={() => handleConnect(detailIntegration.provider)}>
-                  Connect
-                </Button>
-              )}
+              <div className="mt-6 flex gap-3">
+                <Button size="sm" color="secondary" className="flex-1" onClick={() => setDetailIntegration(null)}>Close</Button>
+                {isDetailSoon ? (
+                  <Button size="sm" color="secondary" className="flex-1" isDisabled>
+                    Coming Soon
+                  </Button>
+                ) : isConnected(detailIntegration.provider) ? (
+                  <Button size="sm" color="secondary" className="flex-1" onClick={() => { handleDisconnect(detailIntegration.provider); setDetailIntegration(null); }}>
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button size="sm" color="primary" className="flex-1" onClick={() => handleConnect(detailIntegration.provider)}>
+                    Connect
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* Disconnect Confirmation */}
+      <ConfirmationDialog
+        isOpen={!!disconnectTarget}
+        onClose={() => setDisconnectTarget(null)}
+        onConfirm={confirmDisconnect}
+        title="Disconnect Integration?"
+        description={`This will disconnect ${disconnectTarget || "this integration"}. You can reconnect it later.`}
+        confirmLabel="Disconnect"
+        variant="warning"
+      />
     </div>
   );
 }

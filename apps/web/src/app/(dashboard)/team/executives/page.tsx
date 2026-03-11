@@ -33,18 +33,23 @@ const convertToUIExecutive = (dbExec: DatabaseExecutive): Executive => {
 
 export default function ExecutivesPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [isAddExecutiveOpen, setIsAddExecutiveOpen] = useState(false);
 
   // Fetch executives from database
   const { executives: dbExecutives, isLoading, error, stats, createExecutive, refetch } = useExecutives();
 
-  // Convert database executives to UI format
+  // Convert database executives to UI format, filtering archived
   const executives = useMemo(() => {
     if (Array.isArray(dbExecutives)) {
-      return dbExecutives.map(convertToUIExecutive);
+      const filtered = showArchived ? dbExecutives : dbExecutives.filter(e => !e.archived_at);
+      return filtered.map(e => ({
+        ...convertToUIExecutive(e),
+        isArchived: !!e.archived_at,
+      }));
     }
     return [];
-  }, [dbExecutives]);
+  }, [dbExecutives, showArchived]);
 
   const handleAddExecutive = useCallback(async (executiveData: Omit<Executive, "id">) => {
     try {
@@ -125,17 +130,23 @@ export default function ExecutivesPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="w-full lg:max-w-xs">
-        <InputBase
-          size="sm"
-          type="search"
-          aria-label="Search"
-          placeholder="Search executives..."
-          icon={SearchLg}
-          value={searchQuery}
-          onChange={(value) => setSearchQuery(value)}
-        />
+      {/* Search & Filters */}
+      <div className="flex items-center gap-4">
+        <div className="w-full lg:max-w-xs">
+          <InputBase
+            size="sm"
+            type="search"
+            aria-label="Search"
+            placeholder="Search executives..."
+            icon={SearchLg}
+            value={searchQuery}
+            onChange={(value) => setSearchQuery(value)}
+          />
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+          <span className="text-sm text-tertiary">Show Archived</span>
+        </label>
       </div>
 
       {/* Executives Grid */}
@@ -150,7 +161,9 @@ export default function ExecutivesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredExecutives.map((executive) => (
-            <ExecutiveCard key={executive.id} executive={executive} />
+            <div key={executive.id} className={executive.isArchived ? 'opacity-50' : ''}>
+              <ExecutiveCard executive={executive} />
+            </div>
           ))}
         </div>
       )}

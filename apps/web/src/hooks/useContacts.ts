@@ -13,6 +13,7 @@ export interface DatabaseContact {
   title: string | null;
   company: string;
   email: string;
+  additional_emails: string[] | null;
   phone: string | null;
   mobile: string | null;
   address: {
@@ -52,6 +53,7 @@ export interface ContactFilters {
 export interface CreateContactData {
   full_name: string;
   email: string;
+  additional_emails?: string[];
   company: string;
   title?: string;
   phone?: string;
@@ -68,6 +70,7 @@ export interface CreateContactData {
 export interface UpdateContactData {
   full_name?: string;
   email?: string;
+  additional_emails?: string[] | null;
   company?: string;
   title?: string | null;
   phone?: string | null;
@@ -78,6 +81,9 @@ export interface UpdateContactData {
   relationship_strength?: number | null;
   last_contacted_at?: string | null;
   next_followup_at?: string | null;
+  birthday?: string | null;
+  timezone?: string | null;
+  linkedin_url?: string | null;
 }
 
 interface UseContactsReturn {

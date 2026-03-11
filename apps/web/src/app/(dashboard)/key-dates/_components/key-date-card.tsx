@@ -15,7 +15,7 @@ import {
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Avatar } from "@/components/base/avatar/avatar";
 import type { KeyDate, KeyDateCategory } from "./key-dates-data";
-import { getCategoryConfig } from "./key-dates-data";
+import { getCategoryConfig, recurringLabel } from "./key-dates-data";
 
 interface KeyDateCardProps {
   keyDate: KeyDate;
@@ -64,7 +64,7 @@ export function KeyDateCard({ keyDate, onEdit, onDelete }: KeyDateCardProps) {
               {keyDate.recurring && keyDate.recurring !== "none" && (
                 <div className="flex items-center gap-1 rounded-full bg-white/60 px-1.5 py-0.5 dark:bg-gray-800/60">
                   <RefreshCw01 className="h-3 w-3 text-gray-500" />
-                  <span className="text-[10px] text-gray-500 capitalize">{keyDate.recurring}</span>
+                  <span className="text-[10px] text-gray-500">{recurringLabel(keyDate.recurring)}</span>
                 </div>
               )}
             </div>

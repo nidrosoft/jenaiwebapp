@@ -157,7 +157,7 @@ export interface CalendarMeeting {
   location?: string;
   location_type: 'virtual' | 'in_person' | 'phone' | 'hybrid';
   meeting_type: 'internal' | 'external' | 'one_on_one' | 'team' | 'client' | 'interview' | 'other';
-  status: 'scheduled' | 'confirmed' | 'tentative' | 'cancelled';
+  status: 'scheduled' | 'confirmed' | 'tentative' | 'pending' | 'cancelled';
   video_conference_url?: string;
   attendees?: Array<{
     email: string;
@@ -277,7 +277,7 @@ export interface MeetingLogEntry {
   location?: string;
   location_type: 'virtual' | 'in_person' | 'phone' | 'hybrid';
   meeting_type: 'internal' | 'external' | 'one_on_one' | 'team' | 'client' | 'interview' | 'other';
-  status: 'scheduled' | 'confirmed' | 'tentative' | 'cancelled' | 'completed';
+  status: 'scheduled' | 'confirmed' | 'tentative' | 'pending' | 'cancelled' | 'completed';
   video_conference_url?: string;
   executive_id?: string;
   attendees?: Array<{
@@ -302,7 +302,7 @@ interface UseMeetingLogReturn {
 }
 
 export function useMeetingLog(
-  status: 'upcoming' | 'past' | 'cancelled' | 'all' = 'all',
+  status: 'upcoming' | 'pending' | 'past' | 'cancelled' | 'all' = 'all',
   search?: string,
   pageSize: number = 20
 ): UseMeetingLogReturn {
@@ -375,6 +375,11 @@ export function useMeetingLog(
       setIsLoading(false);
     }
   }, [status, search, page, pageSize]);
+
+  // Reset page to 1 when status or search changes
+  useEffect(() => {
+    setPage(1);
+  }, [status, search]);
 
   useEffect(() => {
     fetchMeetings();

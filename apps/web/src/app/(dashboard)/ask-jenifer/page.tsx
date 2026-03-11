@@ -15,6 +15,7 @@ import { Send01, Stars01 } from '@untitledui/icons';
 import { Button } from '@/components/base/buttons/button';
 import { useUser } from '@/hooks/useUser';
 import { cx } from '@/utils/cx';
+import { KnowledgeBaseSidebar } from './_components/knowledge-base-sidebar';
 
 const SUGGESTIONS = [
   'What meetings do I have today?',
@@ -79,7 +80,9 @@ export default function AskJeniferPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] flex-col">
+    <div className="flex h-[calc(100vh-64px)]">
+    {/* Main chat area */}
+    <div className="flex flex-1 flex-col min-w-0">
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {!hasMessages ? (
@@ -203,6 +206,10 @@ export default function AskJeniferPage() {
           Jenifer can make mistakes. Always verify important information.
         </p>
       </div>
+    </div>
+
+    {/* Knowledge Base Sidebar */}
+    <KnowledgeBaseSidebar />
     </div>
   );
 }

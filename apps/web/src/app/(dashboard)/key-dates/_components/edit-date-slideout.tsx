@@ -55,8 +55,12 @@ const reminderOptions = [
 
 const recurringOptions = [
   { label: "Does not repeat", value: "none" },
-  { label: "Yearly", value: "yearly" },
+  { label: "Weekly", value: "weekly" },
+  { label: "Bi-Weekly", value: "bi_weekly" },
   { label: "Monthly", value: "monthly" },
+  { label: "Quarterly", value: "quarterly" },
+  { label: "Bi-Annual", value: "bi_annual" },
+  { label: "Annually", value: "annually" },
 ];
 
 /**
@@ -152,7 +156,7 @@ export function EditDateSlideout({ isOpen, onOpenChange, keyDate, onSubmit }: Ed
       category: formData.get("category") as KeyDateCategory,
       description: (formData.get("description") as string) || undefined,
       reminder: reminderValue > 0 ? reminderValue : undefined,
-      recurring: formData.get("recurring") as "yearly" | "monthly" | "none",
+      recurring: formData.get("recurring") as KeyDate["recurring"],
       relatedPerson: (formData.get("relatedPerson") as string) || undefined,
     };
 

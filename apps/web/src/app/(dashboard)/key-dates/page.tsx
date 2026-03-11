@@ -28,6 +28,33 @@ import { notify } from "@/lib/notifications";
 
 type ViewMode = "list" | "card" | "calendar";
 
+type RecurringType = "weekly" | "bi_weekly" | "monthly" | "quarterly" | "bi_annual" | "annually" | "none";
+
+const RECURRENCE_RULE_MAP: Record<string, string> = {
+  weekly: 'FREQ=WEEKLY',
+  bi_weekly: 'FREQ=WEEKLY;INTERVAL=2',
+  monthly: 'FREQ=MONTHLY',
+  quarterly: 'FREQ=MONTHLY;INTERVAL=3',
+  bi_annual: 'FREQ=MONTHLY;INTERVAL=6',
+  annually: 'FREQ=YEARLY',
+};
+
+function toRecurrenceRule(recurring?: string): string | undefined {
+  if (!recurring) return undefined;
+  return RECURRENCE_RULE_MAP[recurring];
+}
+
+function parseRecurrenceRule(rule: string | null | undefined): RecurringType {
+  if (!rule) return 'none';
+  if (rule === 'FREQ=WEEKLY;INTERVAL=2') return 'bi_weekly';
+  if (rule === 'FREQ=MONTHLY;INTERVAL=3') return 'quarterly';
+  if (rule === 'FREQ=MONTHLY;INTERVAL=6') return 'bi_annual';
+  if (rule.includes('YEARLY')) return 'annually';
+  if (rule.includes('MONTHLY')) return 'monthly';
+  if (rule.includes('WEEKLY')) return 'weekly';
+  return 'none';
+}
+
 // Convert database key date to UI format
 const convertToUIKeyDate = (dbKeyDate: DatabaseKeyDate): KeyDate => {
   // Format the date for display
@@ -53,8 +80,8 @@ const convertToUIKeyDate = (dbKeyDate: DatabaseKeyDate): KeyDate => {
     category: dbKeyDate.category,
     description: dbKeyDate.description || undefined,
     reminder: dbKeyDate.reminder_days?.[0],
-    recurring: dbKeyDate.is_recurring 
-      ? (dbKeyDate.recurrence_rule?.includes('YEARLY') ? 'yearly' : dbKeyDate.recurrence_rule?.includes('MONTHLY') ? 'monthly' : 'none')
+    recurring: dbKeyDate.is_recurring
+      ? parseRecurrenceRule(dbKeyDate.recurrence_rule)
       : 'none',
     relatedPerson: dbKeyDate.related_person || undefined,
   };
@@ -121,7 +148,7 @@ export default function KeyDatesPage() {
         category: dateData.category,
         related_person: dateData.relatedPerson,
         is_recurring: dateData.recurring !== 'none',
-        recurrence_rule: dateData.recurring === 'yearly' ? 'FREQ=YEARLY' : dateData.recurring === 'monthly' ? 'FREQ=MONTHLY' : undefined,
+        recurrence_rule: toRecurrenceRule(dateData.recurring),
         reminder_days: dateData.reminder ? [dateData.reminder] : undefined,
       };
 
@@ -231,7 +258,7 @@ export default function KeyDatesPage() {
         category: dateData.category,
         related_person: dateData.relatedPerson,
         is_recurring: dateData.recurring !== 'none',
-        recurrence_rule: dateData.recurring === 'yearly' ? 'FREQ=YEARLY' : dateData.recurring === 'monthly' ? 'FREQ=MONTHLY' : undefined,
+        recurrence_rule: toRecurrenceRule(dateData.recurring),
         reminder_days: dateData.reminder ? [dateData.reminder] : undefined,
       });
       notify.success('Key date updated', `"${dateData.title}" has been updated.`);

@@ -6,7 +6,7 @@
  * Wired to /api/meetings endpoint
  */
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Calendar,
   Clock,
@@ -42,7 +42,7 @@ interface DisplayMeeting {
   attendees: number;
   location: string;
   locationType: "video" | "in-person" | "phone";
-  status: "scheduled" | "completed" | "cancelled" | "rescheduled";
+  status: "scheduled" | "pending" | "completed" | "cancelled" | "rescheduled";
   type: "internal" | "external" | "personal";
 }
 
@@ -116,10 +116,11 @@ const mapMeetingToDisplay = (meeting: MeetingLogEntry): DisplayMeeting => {
   };
 
   // Map status
-  const statusMap: Record<string, "scheduled" | "completed" | "cancelled" | "rescheduled"> = {
+  const statusMap: Record<string, "scheduled" | "pending" | "completed" | "cancelled" | "rescheduled"> = {
     scheduled: "scheduled",
     confirmed: "scheduled",
-    tentative: "scheduled",
+    pending: "pending",
+    tentative: "pending",
     cancelled: "cancelled",
     completed: "completed",
   };
@@ -140,7 +141,7 @@ const mapMeetingToDisplay = (meeting: MeetingLogEntry): DisplayMeeting => {
 
 export default function MeetingLogPage() {
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>();
-  const [activeTab, setActiveTab] = useState<"upcoming" | "past" | "cancelled" | "all">("upcoming");
+  const [activeTab, setActiveTab] = useState<"upcoming" | "pending" | "past" | "cancelled" | "all">("upcoming");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
@@ -158,6 +159,46 @@ export default function MeetingLogPage() {
     debouncedSearch,
     20
   );
+
+  // Fetch counts for all tabs independently
+  const [tabCounts, setTabCounts] = useState({ upcoming: 0, pending: 0, past: 0, cancelled: 0, all: 0 });
+
+  const fetchTabCounts = useCallback(async () => {
+    try {
+      const [upRes, pendingRes, pastRes, cancelledRes, allRes] = await Promise.all([
+        fetch('/api/meetings?status=upcoming&page_size=1'),
+        fetch('/api/meetings?status=pending&page_size=1'),
+        fetch('/api/meetings?status=past&page_size=1'),
+        fetch('/api/meetings?status=cancelled&page_size=1'),
+        fetch('/api/meetings?page_size=1'),
+      ]);
+      const [upData, pendingData, pastData, cancelledData, allData] = await Promise.all([
+        upRes.ok ? upRes.json() : null,
+        pendingRes.ok ? pendingRes.json() : null,
+        pastRes.ok ? pastRes.json() : null,
+        cancelledRes.ok ? cancelledRes.json() : null,
+        allRes.ok ? allRes.json() : null,
+      ]);
+      setTabCounts({
+        upcoming: upData?.data?.meta?.total ?? 0,
+        pending: pendingData?.data?.meta?.total ?? 0,
+        past: pastData?.data?.meta?.total ?? 0,
+        cancelled: cancelledData?.data?.meta?.total ?? 0,
+        all: allData?.data?.meta?.total ?? 0,
+      });
+    } catch {
+      // Silently fail — counts are non-critical
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTabCounts();
+  }, [fetchTabCounts]);
+
+  // Refetch counts when data changes
+  useEffect(() => {
+    if (!isLoading) fetchTabCounts();
+  }, [apiMeetings.length, isLoading, fetchTabCounts]);
 
   // Transform API meetings to display format
   const displayMeetings = useMemo(() => {
@@ -185,10 +226,9 @@ export default function MeetingLogPage() {
     });
   }, [sortDescriptor, displayMeetings]);
 
-  // Calculate counts (from pagination total or estimate)
-  const upcomingCount = activeTab === "upcoming" ? pagination.total : 0;
-  const pastCount = activeTab === "past" ? pagination.total : 0;
-  const cancelledCount = activeTab === "cancelled" ? pagination.total : 0;
+  const upcomingCount = tabCounts.upcoming;
+  const pastCount = tabCounts.past;
+  const cancelledCount = tabCounts.cancelled;
 
   return (
     <div className="flex flex-col gap-6 p-4 lg:p-8">
@@ -217,14 +257,15 @@ export default function MeetingLogPage() {
 
       {/* Tabs and Search */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <Tabs selectedKey={activeTab} onSelectionChange={(key) => setActiveTab(key as "upcoming" | "past" | "cancelled" | "all")}>
+        <Tabs selectedKey={activeTab} onSelectionChange={(key) => setActiveTab(key as "upcoming" | "pending" | "past" | "cancelled" | "all")}>
           <TabList
             type="button-minimal"
             items={[
               { id: "upcoming", label: `Upcoming (${upcomingCount})` },
+              { id: "pending", label: `Pending (${tabCounts.pending})` },
               { id: "past", label: `Past (${pastCount})` },
               { id: "cancelled", label: `Cancelled (${cancelledCount})` },
-              { id: "all", label: "All" },
+              { id: "all", label: `All (${tabCounts.all})` },
             ]}
           />
         </Tabs>
@@ -316,9 +357,11 @@ export default function MeetingLogPage() {
                           ? "success"
                           : meeting.status === "scheduled"
                           ? "blue"
+                          : meeting.status === "pending"
+                          ? "warning"
                           : meeting.status === "cancelled"
                           ? "error"
-                          : "warning"
+                          : "gray"
                       }
                       type="pill-color"
                       size="sm"
@@ -367,8 +410,10 @@ export default function MeetingLogPage() {
           <Calendar className="h-12 w-12 text-gray-300 dark:text-gray-600" />
           <h3 className="mt-4 text-lg font-medium text-primary">No meetings found</h3>
           <p className="mt-1 text-sm text-tertiary">
-            {activeTab === "upcoming" 
-              ? "No upcoming meetings scheduled" 
+            {activeTab === "upcoming"
+              ? "No upcoming meetings scheduled"
+              : activeTab === "pending"
+              ? "No pending meetings"
               : activeTab === "past"
               ? "No past meetings found"
               : activeTab === "cancelled"

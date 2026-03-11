@@ -77,17 +77,29 @@ async function handlePatch(
       return notFoundResponse('Approval');
     }
 
-    // Only allow updates if still pending
-    if (existing.status !== 'pending' && existing.status !== 'info_requested') {
+    // Only allow status changes if still pending or info_requested
+    if (body.status && existing.status !== 'pending' && existing.status !== 'info_requested') {
       return internalErrorResponse('Cannot update a decided approval');
+    }
+
+    const { comment, ...updateFields } = body;
+    const updatePayload: Record<string, unknown> = {
+      ...updateFields,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Set decided_by/decided_at when making a decision
+    if (body.status === 'approved' || body.status === 'rejected') {
+      updatePayload.decided_by = context.user.id;
+      updatePayload.decided_at = new Date().toISOString();
+      if (comment) {
+        updatePayload.decision_notes = comment;
+      }
     }
 
     const { data, error } = await supabase
       .from('approvals')
-      .update({
-        ...body,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq('id', id)
       .select()
       .single();

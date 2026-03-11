@@ -6,7 +6,7 @@
  * Connected to real database via /api/dashboard
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AddTaskSlideout } from "../tasks/_components/add-task-slideout";
 import type { Task } from "../tasks/_components/task-types";
 import { NewMeetingSlideout, type MeetingFormData } from "../scheduling/_components/new-meeting-slideout";
@@ -65,9 +65,17 @@ const getInitials = (name: string) => {
 
 const getGreeting = (): string => {
   const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  return "Good evening"; // 17-23 and 0-4
+};
+
+const formatLocalTime = (): string => {
+  return new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
 };
 
 const formatTodayDate = (): string => {
@@ -85,6 +93,17 @@ export default function DashboardPage() {
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [isScheduleMeetingOpen, setIsScheduleMeetingOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Live clock that updates every minute
+  const [currentTime, setCurrentTime] = useState(formatLocalTime());
+  const [greeting, setGreeting] = useState(getGreeting());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(formatLocalTime());
+      setGreeting(getGreeting());
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch real data from API
   const { data: dashboardData, isLoading, error, refetch } = useDashboard();
@@ -334,8 +353,8 @@ export default function DashboardPage() {
 
           <div className="flex flex-col items-start justify-between gap-4 lg:flex-row">
             <div>
-              <p className="text-xl font-semibold text-primary lg:text-display-xs">{getGreeting()}, {firstName}</p>
-              <p className="text-sm text-tertiary">{formatTodayDate()}</p>
+              <p className="text-xl font-semibold text-primary lg:text-display-xs">{greeting}, {firstName}</p>
+              <p className="text-sm text-tertiary">{formatTodayDate()} &middot; {currentTime}</p>
             </div>
             <div className="flex gap-3">
               <Button size="md" color="secondary" iconLeading={Calendar} onClick={() => setIsScheduleMeetingOpen(true)}>

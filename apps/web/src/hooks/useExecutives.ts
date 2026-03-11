@@ -23,6 +23,7 @@ export interface DatabaseExecutive {
   avatar_url: string | null;
   bio: string | null;
   is_active: boolean;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }

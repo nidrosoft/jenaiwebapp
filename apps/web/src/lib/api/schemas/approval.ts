@@ -31,10 +31,12 @@ export const createApprovalSchema = z.object({
 export const updateApprovalSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().min(1).max(5000).optional(),
+  status: approvalStatusSchema.optional(),
   urgency: approvalUrgencySchema.optional(),
   amount: z.number().positive().optional(),
   currency: z.string().length(3).optional(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  comment: z.string().max(2000).optional(),
 });
 
 export const approvalDecisionSchema = z.object({

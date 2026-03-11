@@ -6,7 +6,7 @@
  * Connected to real database via /api/tasks
  */
 
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   FilterLines,
   Plus,
@@ -14,6 +14,8 @@ import {
   Settings01,
   Edit01,
   Trash01,
+  XClose,
+  Folder,
 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import { InputBase } from "@/components/base/input/input";
@@ -37,7 +39,7 @@ import { ConfirmDeleteDialog } from "@/components/application/confirm-delete-dia
 // Convert database task to UI task format
 const convertToUITask = (dbTask: DatabaseTask): Task => ({
   id: dbTask.id,
-  title: dbTask.title,
+  title: dbTask.title || '',
   description: dbTask.description || undefined,
   priority: dbTask.priority,
   status: dbTask.status,
@@ -69,6 +71,11 @@ export default function TodoPage() {
   const [addTaskDefaultStatus, setAddTaskDefaultStatus] = useState<Task["status"] | undefined>(undefined);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deleteConfirmTaskId, setDeleteConfirmTaskId] = useState<string | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [dueDateFrom, setDueDateFrom] = useState("");
+  const [dueDateTo, setDueDateTo] = useState("");
+  const filterRef = useRef<HTMLDivElement>(null);
 
   // Dynamic categories
   const [dynamicCategories, setDynamicCategories] = useState<Array<{ id: string; name: string; color: string; is_default: boolean }>>([]);
@@ -78,6 +85,16 @@ export default function TodoPage() {
   const [editingCategoryName, setEditingCategoryName] = useState("");
   const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
   const [deleteCategoryName, setDeleteCategoryName] = useState("");
+
+  // P2-17: Folders
+  const [folders, setFolders] = useState<Array<{ id: string; name: string; color: string }>>([]);
+  const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [isAddFolderOpen, setIsAddFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
+  const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
+  const [deleteFolderName, setDeleteFolderName] = useState("");
 
   // Fetch categories
   useEffect(() => {
@@ -96,6 +113,18 @@ export default function TodoPage() {
       }
     };
     fetchCategories();
+    // Fetch folders
+    const fetchFolders = async () => {
+      try {
+        const response = await fetch('/api/tasks/folders');
+        if (response.ok) {
+          const result = await response.json();
+          const fl = result.data?.data ?? result.data ?? result;
+          if (Array.isArray(fl)) setFolders(fl);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchFolders();
   }, []);
 
   // Build category items from dynamic categories
@@ -185,6 +214,75 @@ export default function TodoPage() {
     }
   }, [deleteCategoryId]);
 
+  // Folder CRUD handlers
+  const handleAddFolder = useCallback(async () => {
+    if (!newFolderName.trim()) return;
+    try {
+      const response = await fetch('/api/tasks/folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newFolderName.trim() }),
+      });
+      if (response.ok) {
+        const result = await response.json();
+        const newFolder = result.data?.data ?? result.data;
+        setFolders(prev => [...prev, newFolder]);
+        setNewFolderName("");
+        notify.success('Folder created', `"${newFolder.name}" has been added.`);
+      }
+    } catch {
+      notify.error('Failed to create folder', 'Please try again.');
+    }
+  }, [newFolderName]);
+
+  const handleRenameFolder = useCallback(async (id: string) => {
+    if (!editingFolderName.trim()) return;
+    try {
+      const response = await fetch('/api/tasks/folders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name: editingFolderName.trim() }),
+      });
+      if (response.ok) {
+        setFolders(prev => prev.map(f => f.id === id ? { ...f, name: editingFolderName.trim() } : f));
+        setEditingFolderId(null);
+        setEditingFolderName("");
+        notify.success('Folder renamed', 'The folder has been updated.');
+      }
+    } catch {
+      notify.error('Failed to rename folder', 'Please try again.');
+    }
+  }, [editingFolderName]);
+
+  const promptDeleteFolder = useCallback((id: string, name: string) => {
+    setDeleteFolderId(id);
+    setDeleteFolderName(name);
+  }, []);
+
+  const confirmDeleteFolder = useCallback(async () => {
+    if (!deleteFolderId) return;
+    try {
+      const response = await fetch('/api/tasks/folders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: deleteFolderId }),
+      });
+      if (response.ok) {
+        setFolders(prev => prev.filter(f => f.id !== deleteFolderId));
+        if (folderFilter === deleteFolderId) setFolderFilter("all");
+        notify.success('Folder deleted', 'The folder has been removed. Tasks were unassigned.');
+      } else {
+        const result = await response.json();
+        notify.error('Error', result.error?.message || 'Cannot delete this folder.');
+      }
+    } catch {
+      notify.error('Failed to delete folder', 'Please try again.');
+    } finally {
+      setDeleteFolderId(null);
+      setDeleteFolderName('');
+    }
+  }, [deleteFolderId, folderFilter]);
+
   // Fetch tasks from database
   const { tasks: dbTasks, isLoading, stats, createTask, updateTask, deleteTask, refetch } = useTasks();
 
@@ -196,6 +294,14 @@ export default function TodoPage() {
     return [];
   }, [dbTasks]);
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter !== "all") count++;
+    if (dueDateFrom) count++;
+    if (dueDateTo) count++;
+    return count;
+  }, [statusFilter, dueDateFrom, dueDateTo]);
+
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => {
       // Filter by completion status
@@ -204,7 +310,7 @@ export default function TodoPage() {
       // Filter by search
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
-        if (!task.title.toLowerCase().includes(query) && !task.description?.toLowerCase().includes(query)) {
+        if (!task.title?.toLowerCase().includes(query) && !task.description?.toLowerCase().includes(query)) {
           return false;
         }
       }
@@ -215,9 +321,32 @@ export default function TodoPage() {
       // Filter by category
       if (categoryFilter !== "All" && task.category !== categoryFilter) return false;
 
+      // Filter by status
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+
+      // Filter by folder
+      if (folderFilter !== "all") {
+        const dbTask = Array.isArray(dbTasks) ? dbTasks.find(t => t.id === task.id) : null;
+        if (folderFilter === "none") {
+          if ((dbTask as any)?.folder_id) return false;
+        } else {
+          if ((dbTask as any)?.folder_id !== folderFilter) return false;
+        }
+      }
+
+      // Filter by due date range
+      if (dueDateFrom || dueDateTo) {
+        // Find the original db task to compare raw dates
+        const dbTask = Array.isArray(dbTasks) ? dbTasks.find(t => t.id === task.id) : null;
+        const taskDate = dbTask?.due_date ? dbTask.due_date.split('T')[0] : null;
+        if (!taskDate) return false;
+        if (dueDateFrom && taskDate < dueDateFrom) return false;
+        if (dueDateTo && taskDate > dueDateTo) return false;
+      }
+
       return true;
     });
-  }, [tasks, searchQuery, priorityFilter, categoryFilter, showCompleted]);
+  }, [tasks, dbTasks, searchQuery, priorityFilter, categoryFilter, showCompleted, statusFilter, dueDateFrom, dueDateTo, folderFilter]);
 
   // Toggle task completion - update in database
   const toggleComplete = useCallback(async (taskId: string) => {
@@ -261,6 +390,18 @@ export default function TodoPage() {
         }
       }
 
+      // Handle assignedTo - strip "contact:" prefix for contact IDs
+      let assignedToId: string | undefined;
+      let relatedContactId: string | undefined;
+      const rawAssigned = (taskData as any).assignedTo as string | undefined;
+      if (rawAssigned) {
+        if (rawAssigned.startsWith('contact:')) {
+          relatedContactId = rawAssigned.replace('contact:', '');
+        } else {
+          assignedToId = rawAssigned;
+        }
+      }
+
       const createData: CreateTaskData = {
         title: taskData.title,
         description: taskData.description,
@@ -268,7 +409,14 @@ export default function TodoPage() {
         priority: taskData.priority,
         category: taskData.category,
         due_date: dueDate,
-        subtasks: taskData.subtasks?.map(st => ({ title: st.title, completed: st.completed })) || [],
+        assigned_to: assignedToId,
+        related_contact_id: relatedContactId,
+        subtasks: taskData.subtasks?.map(st => ({
+          title: st.title,
+          completed: st.completed,
+          due_date: (st as any).due_date,
+          assigned_to: (st as any).assigned_to,
+        })) || [],
       };
 
       await createTask(createData);
@@ -369,6 +517,17 @@ export default function TodoPage() {
   const approvalCount = stats?.approval ?? 0;
   const doneCount = stats?.done ?? 0;
 
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-tertiary">Loading tasks...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col gap-6 p-4 lg:p-8">
       {/* Page Header */}
@@ -428,11 +587,91 @@ export default function TodoPage() {
             </Select>
           </div>
 
-          <Button size="sm" color="secondary" iconLeading={FilterLines}>
-            Filter & Sort
-          </Button>
+          {/* Folder Filter */}
+          {folders.length > 0 && (
+            <div className="w-36">
+              <Select
+                size="sm"
+                placeholder="All Folders"
+                items={[
+                  { id: "all", label: "All Folders" },
+                  { id: "none", label: "No Folder" },
+                  ...folders.map(f => ({ id: f.id, label: f.name })),
+                ]}
+                selectedKey={folderFilter}
+                onSelectionChange={(key) => setFolderFilter(key as string)}
+              >
+                {(item) => <Select.Item id={item.id}>{item.label}</Select.Item>}
+              </Select>
+            </div>
+          )}
+
+          <div className="relative" ref={filterRef}>
+            <Button size="sm" color="secondary" iconLeading={FilterLines} onClick={() => setIsFilterOpen(!isFilterOpen)}>
+              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            </Button>
+            {isFilterOpen && (
+              <div className="absolute left-0 top-full z-[70] mt-1 w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">Filters</span>
+                  <button onClick={() => setIsFilterOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                    <XClose className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Status Filter */}
+                <div className="mb-3">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Status</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="todo">To Do</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="approval">Approval</option>
+                    <option value="done">Done</option>
+                  </select>
+                </div>
+
+                {/* Due Date Range */}
+                <div className="mb-3">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Due Date From</label>
+                  <input
+                    type="date"
+                    value={dueDateFrom}
+                    onChange={(e) => setDueDateFrom(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Due Date To</label>
+                  <input
+                    type="date"
+                    value={dueDateTo}
+                    onChange={(e) => setDueDateTo(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  />
+                </div>
+
+                {/* Clear Filters */}
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => { setStatusFilter("all"); setDueDateFrom(""); setDueDateTo(""); }}
+                    className="w-full rounded-lg border border-gray-200 py-1.5 text-center text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+                  >
+                    Clear All Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
           <Button size="sm" color="secondary" iconLeading={Settings01} onClick={() => setIsCategoriesModalOpen(true)}>
             Categories
+          </Button>
+          <Button size="sm" color="secondary" iconLeading={Folder} onClick={() => setIsAddFolderOpen(true)}>
+            Folders
           </Button>
         </div>
 
@@ -613,6 +852,94 @@ export default function TodoPage() {
             {/* Close Button */}
             <div className="mt-4 flex justify-end">
               <Button size="sm" color="secondary" onClick={() => setIsCategoriesModalOpen(false)}>Done</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete Folder Confirmation */}
+      <ConfirmDeleteDialog
+        isOpen={!!deleteFolderId}
+        onClose={() => { setDeleteFolderId(null); setDeleteFolderName(''); }}
+        onConfirm={confirmDeleteFolder}
+        title="Delete Folder"
+        message={`Are you sure you want to delete "${deleteFolderName}"? Tasks in this folder will be unassigned but not deleted.`}
+      />
+
+      {/* Manage Folders Modal */}
+      {isAddFolderOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsAddFolderOpen(false)}>
+          <div className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Manage Folders</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Organize tasks into folders. Deleting a folder unassigns its tasks.</p>
+            </div>
+
+            {/* Folder List */}
+            <div className="mb-4 max-h-64 overflow-y-auto">
+              {folders.map((folder) => (
+                <div key={folder.id} className="flex items-center justify-between border-b border-gray-100 py-2.5 dark:border-gray-800 last:border-b-0">
+                  {editingFolderId === folder.id ? (
+                    <div className="flex flex-1 items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingFolderName}
+                        onChange={(e) => setEditingFolderName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleRenameFolder(folder.id); if (e.key === 'Escape') setEditingFolderId(null); }}
+                        className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                        autoFocus
+                      />
+                      <Button size="sm" color="primary" onClick={() => handleRenameFolder(folder.id)}>Save</Button>
+                      <Button size="sm" color="secondary" onClick={() => setEditingFolderId(null)}>Cancel</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Folder className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">{folder.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setEditingFolderId(folder.id); setEditingFolderName(folder.name); }}
+                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                          title="Rename"
+                        >
+                          <Edit01 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => promptDeleteFolder(folder.id, folder.name)}
+                          className="rounded p-1 text-gray-400 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-500/10 dark:hover:text-error-400"
+                          title="Delete"
+                        >
+                          <Trash01 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              {folders.length === 0 && (
+                <p className="py-4 text-center text-sm text-gray-500">No folders yet. Add one below.</p>
+              )}
+            </div>
+
+            {/* Add New Folder */}
+            <div className="flex gap-2 border-t border-gray-100 pt-4 dark:border-gray-800">
+              <input
+                type="text"
+                placeholder="New folder name..."
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddFolder(); }}
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder:text-gray-500"
+              />
+              <Button size="sm" color="primary" onClick={handleAddFolder} disabled={!newFolderName.trim()}>
+                Add
+              </Button>
+            </div>
+
+            {/* Close Button */}
+            <div className="mt-4 flex justify-end">
+              <Button size="sm" color="secondary" onClick={() => setIsAddFolderOpen(false)}>Done</Button>
             </div>
           </div>
         </div>

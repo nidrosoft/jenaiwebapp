@@ -39,17 +39,18 @@ export function TaskListView({ tasks, selectedTask, onTaskClick, onToggleComplet
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {tasks.map((task) => {
-        const priority = priorityConfig[task.priority];
-        const status = statusConfig[task.status];
-        const categoryColor = categoryColors[task.category] || categoryColors.Admin;
-        const isSelected = selectedTask?.id === task.id;
+  const activeTasks = tasks.filter(t => !t.completed);
+  const completedTasks = tasks.filter(t => t.completed);
 
-        return (
-          <div
-            key={task.id}
+  const renderTask = (task: Task) => {
+    const priority = priorityConfig[task.priority];
+    const status = statusConfig[task.status];
+    const categoryColor = categoryColors[task.category] || categoryColors.Admin;
+    const isSelected = selectedTask?.id === task.id;
+
+    return (
+      <div
+        key={task.id}
             onClick={() => onTaskClick?.(task)}
             className={`group flex cursor-pointer items-start gap-4 rounded-xl bg-white p-4 shadow-sm ring-1 transition-all hover:shadow-md dark:bg-gray-900 ${
               isSelected 
@@ -143,7 +144,24 @@ export function TaskListView({ tasks, selectedTask, onTaskClick, onToggleComplet
             </div>
           </div>
         );
-      })}
+  };
+
+  return (
+    <div className="space-y-3">
+      {activeTasks.map(renderTask)}
+      {completedTasks.length > 0 && (
+        <>
+          <div className="flex items-center gap-3 pt-4 pb-1">
+            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+            <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+              <CheckCircle className="h-3.5 w-3.5" />
+              Done ({completedTasks.length})
+            </span>
+            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+          </div>
+          {completedTasks.map(renderTask)}
+        </>
+      )}
     </div>
   );
 }

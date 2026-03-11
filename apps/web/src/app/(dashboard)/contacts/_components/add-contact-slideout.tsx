@@ -37,6 +37,7 @@ const categoryOptions = [
 export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContactSlideoutProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [additionalEmails, setAdditionalEmails] = useState<string[]>([]);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
@@ -63,6 +64,7 @@ export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContac
     const contact: Omit<Contact, "id"> = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,
+      additionalEmails: additionalEmails.length > 0 ? additionalEmails : undefined,
       phone: formData.get("phone") as string,
       company: formData.get("company") as string,
       title: formData.get("title") as string,
@@ -70,14 +72,17 @@ export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContac
       tags: tags.length > 0 ? tags : undefined,
       notes: formData.get("notes") as string || undefined,
       birthday: formData.get("birthday") as string || undefined,
+      timezone: formData.get("timezone") as string || undefined,
+      linkedinUrl: formData.get("linkedin_url") as string || undefined,
     };
 
     onSubmit?.(contact);
     onOpenChange(false);
-    
+
     // Reset form state
     setTags([]);
     setTagInput("");
+    setAdditionalEmails([]);
   };
 
   return (
@@ -138,6 +143,45 @@ export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContac
               </div>
             </div>
 
+            {/* Additional Emails */}
+            {additionalEmails.map((ae, idx) => (
+              <div key={idx} className="flex items-end gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <label className="text-sm font-medium text-secondary">
+                    Additional Email {idx + 1}
+                  </label>
+                  <Input
+                    type="email"
+                    size="sm"
+                    icon={Mail01}
+                    placeholder="alternate@company.com"
+                    value={ae}
+                    onChange={(val) => {
+                      const updated = [...additionalEmails];
+                      updated[idx] = val;
+                      setAdditionalEmails(updated);
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdditionalEmails(additionalEmails.filter((_, i) => i !== idx))}
+                  className="mb-0.5 rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            {additionalEmails.length < 5 && (
+              <button
+                type="button"
+                onClick={() => setAdditionalEmails([...additionalEmails, ""])}
+                className="self-start text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
+              >
+                + Add another email
+              </button>
+            )}
+
             {/* Company & Title */}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="flex flex-col gap-1.5">
@@ -165,16 +209,60 @@ export function AddContactSlideout({ isOpen, onOpenChange, onSubmit }: AddContac
               </div>
             </div>
 
-            {/* Birthday */}
+            {/* Birthday & Time Zone */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="birthday" className="text-sm font-medium text-secondary">
+                  Birthday
+                </label>
+                <input
+                  id="birthday"
+                  name="birthday"
+                  type="date"
+                  className="w-full rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="timezone" className="text-sm font-medium text-secondary">
+                  Time Zone
+                </label>
+                <NativeSelect
+                  id="timezone"
+                  name="timezone"
+                  options={[
+                    { label: "Select time zone...", value: "" },
+                    { label: "US Eastern (ET)", value: "America/New_York" },
+                    { label: "US Central (CT)", value: "America/Chicago" },
+                    { label: "US Mountain (MT)", value: "America/Denver" },
+                    { label: "US Pacific (PT)", value: "America/Los_Angeles" },
+                    { label: "US Alaska", value: "America/Anchorage" },
+                    { label: "US Hawaii", value: "Pacific/Honolulu" },
+                    { label: "UK / London (GMT/BST)", value: "Europe/London" },
+                    { label: "Central Europe (CET)", value: "Europe/Berlin" },
+                    { label: "Eastern Europe (EET)", value: "Europe/Helsinki" },
+                    { label: "India (IST)", value: "Asia/Kolkata" },
+                    { label: "China (CST)", value: "Asia/Shanghai" },
+                    { label: "Japan (JST)", value: "Asia/Tokyo" },
+                    { label: "Australia Eastern", value: "Australia/Sydney" },
+                    { label: "Singapore (SGT)", value: "Asia/Singapore" },
+                    { label: "Dubai (GST)", value: "Asia/Dubai" },
+                    { label: "Sao Paulo (BRT)", value: "America/Sao_Paulo" },
+                  ]}
+                  defaultValue=""
+                />
+              </div>
+            </div>
+
+            {/* LinkedIn */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="birthday" className="text-sm font-medium text-secondary">
-                Birthday
+              <label htmlFor="linkedin_url" className="text-sm font-medium text-secondary">
+                LinkedIn URL
               </label>
-              <input
-                id="birthday"
-                name="birthday"
-                type="date"
-                className="w-full rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100"
+              <Input
+                id="linkedin_url"
+                name="linkedin_url"
+                size="sm"
+                placeholder="https://linkedin.com/in/username"
               />
             </div>
 

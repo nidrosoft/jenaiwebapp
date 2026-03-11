@@ -49,17 +49,33 @@ export function AddDelegationSlideout({ isOpen, onOpenChange, onSubmit }: AddDel
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch team members (settings/team endpoint)
-        const teamRes = await fetch('/api/settings/team');
+        // Fetch team members and contacts
+        const [teamRes, contactsRes] = await Promise.all([
+          fetch('/api/settings/team'),
+          fetch('/api/contacts?page_size=100'),
+        ]);
+        const combined: { label: string; value: string }[] = [];
         if (teamRes.ok) {
           const teamResult = await teamRes.json();
           const members = (teamResult.data?.data ?? teamResult.data)?.members ?? [];
-          setTeamMemberOptions(
-            Array.isArray(members) && members.length > 0
-              ? members.map((m: any) => ({ label: m.full_name || m.email, value: m.id }))
-              : [{ label: 'No team members', value: '' }]
-          );
+          if (Array.isArray(members) && members.length > 0) {
+            combined.push({ label: '── Team Members ──', value: '_header_team' });
+            members.filter((m: any) => m.is_active !== false).forEach((m: any) => {
+              combined.push({ label: m.full_name || m.email, value: m.id });
+            });
+          }
         }
+        if (contactsRes.ok) {
+          const contactResult = await contactsRes.json();
+          const contacts = contactResult.data?.data ?? contactResult.data ?? [];
+          if (Array.isArray(contacts) && contacts.length > 0) {
+            combined.push({ label: '── Contacts ──', value: '_header_contacts' });
+            contacts.forEach((c: any) => {
+              combined.push({ label: `${c.full_name}${c.company ? ` (${c.company})` : ''}`, value: `contact:${c.id}` });
+            });
+          }
+        }
+        setTeamMemberOptions(combined.length > 0 ? combined : [{ label: 'No team members', value: '' }]);
 
         // Fetch existing tasks
         const tasksRes = await fetch('/api/tasks?page_size=100');
@@ -177,11 +193,34 @@ export function AddDelegationSlideout({ isOpen, onOpenChange, onSubmit }: AddDel
               />
             </div>
 
-            {/* Due Date */}
+            {/* Due Date with Quick Buttons */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-secondary">
                 Due Date <span className="text-error-500">*</span>
               </label>
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today(getLocalTimeZone()))}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today(getLocalTimeZone()).add({ days: 1 }))}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today(getLocalTimeZone()).add({ weeks: 1 }))}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Next Week
+                </button>
+              </div>
               <DatePicker
                 value={dueDate}
                 onChange={setDueDate}

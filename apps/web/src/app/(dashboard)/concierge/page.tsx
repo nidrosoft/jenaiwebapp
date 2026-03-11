@@ -18,8 +18,12 @@ import {
   List,
   Grid01,
   RefreshCw01,
+  Edit01,
+  Trash01,
+  Heart,
 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { InputBase } from "@/components/base/input/input";
 import { Badge } from "@/components/base/badges/badges";
 import { TabList, Tabs } from "@/components/application/tabs/tabs";
@@ -29,7 +33,8 @@ import {
   type Service,
 } from "./_components/concierge-data";
 import { AddServiceSlideout } from "./_components/add-service-slideout";
-import { useConcierge, type DatabaseConciergeService, type CreateConciergeServiceData } from "@/hooks/useConcierge";
+import { ConfirmDeleteDialog } from "@/components/application/confirm-delete-dialog";
+import { useConcierge, type DatabaseConciergeService, type CreateConciergeServiceData, type UpdateConciergeServiceData } from "@/hooks/useConcierge";
 import { notify } from "@/lib/notifications";
 
 type ViewMode = "list" | "card";
@@ -55,9 +60,11 @@ export default function ConciergePage() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [viewMode, setViewMode] = useState<ViewMode>("card");
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Fetch services from database
-  const { services: dbServices, isLoading, error, stats, createService, toggleFavorite, refetch } = useConcierge();
+  const { services: dbServices, isLoading, error, stats, createService, updateService, deleteService, toggleFavorite, refetch } = useConcierge();
 
   // Convert database services to UI format
   const services = useMemo(() => {
@@ -104,6 +111,54 @@ export default function ConciergePage() {
       notify.error('Failed to update favorite', 'Please try again.');
     }
   }, [toggleFavorite]);
+
+  const handleEditService = useCallback((service: Service) => {
+    setEditingService(service);
+    setIsAddServiceOpen(true);
+  }, []);
+
+  const handleUpdateService = useCallback(async (serviceData: Omit<Service, "id">) => {
+    if (!editingService) return;
+    try {
+      let website = serviceData.website;
+      if (website && !website.startsWith('http://') && !website.startsWith('https://')) {
+        website = `https://${website}`;
+      }
+
+      const updateData: UpdateConciergeServiceData = {
+        name: serviceData.name,
+        description: serviceData.description,
+        category: serviceData.category,
+        contact_name: serviceData.contact,
+        phone: serviceData.phone,
+        address: serviceData.address,
+        website: website || undefined,
+        rating: serviceData.rating,
+        notes: serviceData.notes,
+        tags: serviceData.tags,
+        is_favorite: serviceData.isFavorite,
+      };
+
+      await updateService(editingService.id, updateData);
+      notify.success('Service updated', `"${serviceData.name}" has been updated.`);
+      setEditingService(null);
+    } catch (err) {
+      console.error('Failed to update service:', err);
+      notify.error('Failed to update service', err instanceof Error ? err.message : 'Please try again.');
+    }
+  }, [editingService, updateService]);
+
+  const handleDeleteService = useCallback(async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await deleteService(deleteConfirmId);
+      notify.success('Service deleted', 'The service has been removed.');
+    } catch (err) {
+      console.error('Failed to delete service:', err);
+      notify.error('Failed to delete service', 'Please try again.');
+    }
+    setDeleteConfirmId(null);
+  }, [deleteConfirmId, deleteService]);
 
   const filteredServices = useMemo(() => {
     let filtered = services;
@@ -296,6 +351,11 @@ export default function ConciergePage() {
                       <span className="text-xs text-gray-500 truncate max-w-[200px]">{service.address}</span>
                     </div>
                   )}
+                  <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <ButtonUtility size="xs" color="tertiary" tooltip={service.isFavorite ? "Unfavorite" : "Favorite"} icon={Star01} onClick={() => handleToggleFavorite(service.id)} />
+                    <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} onClick={() => handleEditService(service)} />
+                    <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} onClick={() => setDeleteConfirmId(service.id)} />
+                  </div>
                 </div>
               </div>
             );
@@ -321,12 +381,35 @@ export default function ConciergePage() {
                 key={service.id}
                 className={`group relative overflow-hidden rounded-2xl border bg-gradient-to-br p-5 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${colors.bg} ${colors.border}`}
               >
-                {/* Favorite Star */}
-                {service.isFavorite && (
-                  <div className="absolute top-4 right-4">
-                    <Star01 className="h-5 w-5 text-amber-500 fill-amber-500" />
+                {/* Actions */}
+                <div className="absolute top-3 right-3 flex items-center gap-0.5">
+                  {service.isFavorite && (
+                    <Star01 className="h-4 w-4 text-amber-500 fill-amber-500 mr-1" />
+                  )}
+                  <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      onClick={() => handleToggleFavorite(service.id)}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-white/80 hover:text-amber-500 dark:hover:bg-gray-800/80"
+                      title={service.isFavorite ? "Unfavorite" : "Favorite"}
+                    >
+                      <Star01 className={`h-4 w-4 ${service.isFavorite ? "text-amber-500 fill-amber-500" : ""}`} />
+                    </button>
+                    <button
+                      onClick={() => handleEditService(service)}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-white/80 hover:text-gray-700 dark:hover:bg-gray-800/80 dark:hover:text-gray-200"
+                      title="Edit"
+                    >
+                      <Edit01 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmId(service.id)}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-error-50 hover:text-error-600 dark:hover:bg-error-900/20 dark:hover:text-error-400"
+                      title="Delete"
+                    >
+                      <Trash01 className="h-4 w-4" />
+                    </button>
                   </div>
-                )}
+                </div>
 
                 {/* Icon & Rating */}
                 <div className="flex items-start gap-3">
@@ -396,11 +479,24 @@ export default function ConciergePage() {
         </div>
       )}
 
-      {/* Add Service Slideout */}
+      {/* Add/Edit Service Slideout */}
       <AddServiceSlideout
         isOpen={isAddServiceOpen}
-        onOpenChange={setIsAddServiceOpen}
-        onSubmit={handleAddService}
+        onOpenChange={(open) => {
+          setIsAddServiceOpen(open);
+          if (!open) setEditingService(null);
+        }}
+        onSubmit={editingService ? handleUpdateService : handleAddService}
+        editService={editingService}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmDeleteDialog
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDeleteService}
+        title="Delete Service"
+        message="Are you sure you want to delete this concierge service? This action cannot be undone."
       />
     </div>
   );

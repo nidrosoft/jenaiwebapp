@@ -64,6 +64,7 @@ export const createExecutiveSchema = z.object({
 
 export const updateExecutiveSchema = z.object({
   full_name: z.string().min(1).max(255).optional(),
+  preferred_name: z.string().max(100).optional().nullable(),
   title: z.string().max(255).optional().nullable(),
   email: z.string().email().optional().nullable(),
   phones: z.array(phoneEntrySchema).optional(),
@@ -77,6 +78,46 @@ export const updateExecutiveSchema = z.object({
   dietary_preferences: dietaryPreferencesSchema.partial().optional(),
   travel_preferences: travelPreferencesSchema.partial().optional(),
   is_active: z.boolean().optional(),
+  // P2-06: Communication preferences
+  communication_preferences: z.array(z.string().max(50)).optional(),
+  // P2-07: Meeting preferences
+  meeting_preferences: z.array(z.string().max(50)).optional(),
+  typical_meeting_hours_start: z.string().max(10).optional().nullable(),
+  typical_meeting_hours_end: z.string().max(10).optional().nullable(),
+  // P2-09: Archive
+  archived_at: z.string().datetime().optional().nullable(),
+  // P2-11: Travel profile (comprehensive)
+  home_airports: z.array(z.string().max(10)).optional(),
+  airline_preferences: z.array(z.string().max(100)).optional(),
+  hotel_preferences: z.array(z.string().max(100)).optional(),
+  flight_class_general: z.string().max(50).optional().nullable(),
+  flight_class_domestic: z.string().max(50).optional().nullable(),
+  flight_class_international: z.string().max(50).optional().nullable(),
+  seat_preference: z.string().max(50).optional().nullable(),
+  rideshare_preferences: z.array(z.string().max(50)).optional(),
+  tsa_number_encrypted: z.string().max(100).optional().nullable(),
+  global_entry_number_encrypted: z.string().max(100).optional().nullable(),
+  layover_preference: z.string().max(100).optional().nullable(),
+  avoid_red_eye: z.boolean().optional(),
+  avoid_arrivals_before: z.string().max(10).optional().nullable(),
+  avoid_departures_after: z.string().max(10).optional().nullable(),
+  dietary_restrictions: z.array(z.string().max(100)).optional(),
+  favorite_cuisines: z.array(z.string().max(100)).optional(),
+  coffee_order: z.string().max(500).optional().nullable(),
+  tea_order: z.string().max(500).optional().nullable(),
+  snack_preferences: z.string().max(1000).optional().nullable(),
+  // P2-12: Religion
+  religion: z.string().max(100).optional().nullable(),
+  // P2-13: Approval threshold
+  approval_threshold: z.number().min(0).optional().nullable(),
+  // P2-15: Medical
+  carries_epipen: z.boolean().optional(),
+  accessibility_needs: z.string().max(2000).optional().nullable(),
+  allergies: z.array(z.string().max(100)).optional(),
+  insurance_provider: z.string().max(255).optional().nullable(),
+  insurance_plan_name: z.string().max(255).optional().nullable(),
+  insurance_member_id_encrypted: z.string().max(255).optional().nullable(),
+  preferred_medical_facilities: z.string().max(2000).optional().nullable(),
 });
 
 export const executiveQuerySchema = z.object({

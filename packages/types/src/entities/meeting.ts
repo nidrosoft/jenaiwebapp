@@ -2,7 +2,7 @@
  * Meeting Entity Types
  */
 
-export type MeetingStatus = 'scheduled' | 'confirmed' | 'tentative' | 'cancelled';
+export type MeetingStatus = 'scheduled' | 'confirmed' | 'tentative' | 'pending' | 'cancelled';
 export type LocationType = 'virtual' | 'in_person' | 'phone' | 'hybrid';
 export type MeetingType = 'internal' | 'external' | 'one_on_one' | 'team' | 'client' | 'interview' | 'other';
 export type AttendeeStatus = 'accepted' | 'declined' | 'tentative' | 'needs_action';
@@ -130,5 +130,5 @@ export interface CalendarEvent {
   attendees?: Attendee[];
   video_conference_url?: string;
   recurring_event_id?: string;
-  status: 'confirmed' | 'tentative' | 'cancelled';
+  status: 'confirmed' | 'tentative' | 'pending' | 'cancelled';
 }

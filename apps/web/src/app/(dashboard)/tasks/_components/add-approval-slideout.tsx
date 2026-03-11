@@ -50,13 +50,19 @@ const categoryOptions = [
 export function AddApprovalSlideout({ isOpen, onOpenChange, onSubmit }: AddApprovalSlideoutProps) {
   const [dueDate, setDueDate] = useState<DateValue | null>(null);
   const [executiveOptions, setExecutiveOptions] = useState<{ label: string; value: string }[]>([]);
+  const [assigneeOptions, setAssigneeOptions] = useState<{ label: string; value: string }[]>([]);
 
   useEffect(() => {
-    const fetchExecutives = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch("/api/executives?page_size=100");
-        if (response.ok) {
-          const result = await response.json();
+        const [execRes, teamRes, contactsRes] = await Promise.all([
+          fetch("/api/executives?page_size=100"),
+          fetch('/api/settings/team'),
+          fetch('/api/contacts?page_size=100'),
+        ]);
+
+        if (execRes.ok) {
+          const result = await execRes.json();
           const list = result.data?.data ?? result.data ?? [];
           setExecutiveOptions(
             Array.isArray(list)
@@ -64,11 +70,34 @@ export function AddApprovalSlideout({ isOpen, onOpenChange, onSubmit }: AddAppro
               : []
           );
         }
+
+        const combined: { label: string; value: string }[] = [];
+        if (teamRes.ok) {
+          const teamResult = await teamRes.json();
+          const members = teamResult.data?.data?.members ?? teamResult.data?.members ?? teamResult.data ?? [];
+          if (Array.isArray(members) && members.length > 0) {
+            combined.push({ label: '── Team Members ──', value: '_header_team' });
+            members.filter((m: any) => m.is_active !== false).forEach((m: any) => {
+              combined.push({ label: m.full_name || m.email, value: m.id });
+            });
+          }
+        }
+        if (contactsRes.ok) {
+          const contactResult = await contactsRes.json();
+          const contacts = contactResult.data?.data ?? contactResult.data ?? [];
+          if (Array.isArray(contacts) && contacts.length > 0) {
+            combined.push({ label: '── Contacts ──', value: '_header_contacts' });
+            contacts.forEach((c: any) => {
+              combined.push({ label: `${c.full_name}${c.company ? ` (${c.company})` : ''}`, value: `contact:${c.id}` });
+            });
+          }
+        }
+        setAssigneeOptions(combined);
       } catch (err) {
-        console.error("Failed to fetch executives:", err);
+        console.error("Failed to fetch data:", err);
       }
     };
-    if (isOpen) fetchExecutives();
+    if (isOpen) fetchData();
   }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -218,11 +247,34 @@ export function AddApprovalSlideout({ isOpen, onOpenChange, onSubmit }: AddAppro
               />
             </div>
 
-            {/* Due Date */}
+            {/* Due Date with Quick Buttons */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-secondary">
                 Due Date
               </label>
+              <div className="flex items-center gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today(getLocalTimeZone()))}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today(getLocalTimeZone()).add({ days: 1 }))}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Tomorrow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(today(getLocalTimeZone()).add({ weeks: 1 }))}
+                  className="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Next Week
+                </button>
+              </div>
               <DatePicker
                 value={dueDate}
                 onChange={setDueDate}
@@ -243,6 +295,23 @@ export function AddApprovalSlideout({ isOpen, onOpenChange, onSubmit }: AddAppro
                 name="executive_id"
                 options={executiveOptions}
                 defaultValue={executiveOptions[0]?.value || ""}
+              />
+            </div>
+
+            {/* Assigned To (Team Member or Contact) */}
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="assigned_to"
+                className="text-sm font-medium text-secondary"
+              >
+                Assigned To
+              </label>
+              <p className="text-xs text-tertiary">Team member or contact responsible for this approval</p>
+              <NativeSelect
+                id="assigned_to"
+                name="assigned_to"
+                options={[{ label: "Assign to myself", value: "" }, ...assigneeOptions]}
+                defaultValue=""
               />
             </div>
           </form>

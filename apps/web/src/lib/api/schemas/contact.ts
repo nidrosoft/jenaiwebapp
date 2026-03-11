@@ -20,6 +20,7 @@ export const createContactSchema = z.object({
   title: z.string().max(255).optional(),
   company: z.string().min(1).max(255),
   email: z.string().email(),
+  additional_emails: z.array(z.string().email()).max(5).default([]),
   phone: z.string().max(50).optional(),
   mobile: z.string().max(50).optional(),
   address: contactAddressSchema.optional(),
@@ -32,6 +33,7 @@ export const createContactSchema = z.object({
   assistant_email: z.string().email().optional(),
   linkedin_url: z.string().url().optional(),
   birthday: z.string().max(10).optional(),
+  timezone: z.string().max(100).optional(),
 });
 
 export const updateContactSchema = z.object({
@@ -39,6 +41,7 @@ export const updateContactSchema = z.object({
   title: z.string().max(255).optional().nullable(),
   company: z.string().min(1).max(255).optional(),
   email: z.string().email().optional(),
+  additional_emails: z.array(z.string().email()).max(5).optional().nullable(),
   phone: z.string().max(50).optional().nullable(),
   mobile: z.string().max(50).optional().nullable(),
   address: contactAddressSchema.optional().nullable(),
@@ -54,6 +57,7 @@ export const updateContactSchema = z.object({
   last_contacted_at: z.string().datetime().optional().nullable(),
   next_followup_at: z.string().datetime().optional().nullable(),
   birthday: z.string().max(10).optional().nullable(),
+  timezone: z.string().max(100).optional().nullable(),
 });
 
 export const contactQuerySchema = z.object({

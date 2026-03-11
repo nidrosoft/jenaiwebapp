@@ -5,6 +5,7 @@
 export interface Executive {
   id: string;
   name: string;
+  preferredName?: string;
   title: string;
   email: string;
   phone: string;

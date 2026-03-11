@@ -8,12 +8,15 @@ export interface Contact {
   company: string;
   title: string;
   email: string;
+  additionalEmails?: string[];
   phone: string;
   category: "client" | "vendor" | "partner" | "personal" | "vip";
   tags?: string[];
   notes?: string;
   lastContact?: string;
   birthday?: string;
+  timezone?: string;
+  linkedinUrl?: string;
 }
 
 export const categoryColors: Record<Contact["category"], string> = {

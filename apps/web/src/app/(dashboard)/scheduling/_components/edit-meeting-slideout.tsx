@@ -73,6 +73,7 @@ const locationTypes = [
 const statusOptions = [
   { label: "Scheduled", value: "scheduled" },
   { label: "Confirmed", value: "confirmed" },
+  { label: "Pending", value: "pending" },
   { label: "Tentative", value: "tentative" },
   { label: "Cancelled", value: "cancelled" },
 ];

@@ -119,6 +119,37 @@ async function handlePatch(
       return internalErrorResponse(error.message);
     }
 
+    // Sync birthday → key_dates when birthday field is in the update payload
+    if (body.birthday !== undefined) {
+      try {
+        // Delete any existing birthday key_date for this contact
+        await supabase
+          .from('key_dates')
+          .delete()
+          .eq('related_contact_id', id)
+          .eq('category', 'birthdays')
+          .eq('org_id', context.user.org_id);
+
+        // Insert new birthday key_date if birthday is set
+        if (body.birthday) {
+          const contactName = body.full_name || data?.full_name || 'Contact';
+          await supabase.from('key_dates').insert({
+            org_id: context.user.org_id,
+            title: `${contactName}'s Birthday`,
+            date: body.birthday,
+            category: 'birthdays',
+            related_contact_id: id,
+            is_recurring: true,
+            recurrence_rule: 'FREQ=YEARLY',
+            reminder_days: [7, 1],
+            tags: [],
+          });
+        }
+      } catch (syncErr) {
+        console.error('Birthday sync to key_dates failed:', syncErr);
+      }
+    }
+
     return successResponse({ data });
   } catch (error) {
     console.error('Unexpected error:', error);

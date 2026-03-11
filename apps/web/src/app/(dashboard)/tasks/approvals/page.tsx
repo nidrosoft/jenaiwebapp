@@ -215,7 +215,7 @@ export default function ApprovalsPage() {
             { id: "pending", label: `Pending (${pendingCount})` },
             { id: "approved", label: `Approved (${approvedCount})` },
             { id: "rejected", label: `Rejected (${rejectedCount})` },
-            { id: "all", label: "All" },
+            { id: "all", label: `All (${safeApprovals.length})` },
           ]}
         />
       </Tabs>

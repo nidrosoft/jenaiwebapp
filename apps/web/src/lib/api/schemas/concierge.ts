@@ -56,6 +56,7 @@ export const updateConciergeServiceSchema = z.object({
   special_instructions: z.string().max(2000).optional().nullable(),
   tags: z.array(z.string().max(50)).max(10).optional(),
   is_favorite: z.boolean().optional(),
+  contact_id: z.string().uuid().optional().nullable(),
 });
 
 export const conciergeServiceQuerySchema = z.object({
