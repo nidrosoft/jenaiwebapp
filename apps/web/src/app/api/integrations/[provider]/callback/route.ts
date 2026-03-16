@@ -152,11 +152,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       settings: {},
     };
 
-    // Upsert integration
+    // Upsert integration (unique constraint is on user_id, provider, integration_type)
     const { error: dbError } = await supabase
       .from('integrations')
       .upsert(integrationData, {
-        onConflict: 'org_id,user_id,provider',
+        onConflict: 'user_id,provider,integration_type',
       });
 
     if (dbError) {
