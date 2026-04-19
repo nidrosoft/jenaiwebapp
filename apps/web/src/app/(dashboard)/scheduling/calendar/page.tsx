@@ -302,6 +302,16 @@ export default function CalendarPage() {
       const startDateTime = new Date(`${dateStr}T${startTimeStr}:00`);
       const endDateTime = new Date(`${dateStr}T${endTimeStr}:00`);
 
+      // Map the "calendar" select (e.g. "{executive_id}-work") to executive_id
+      const executiveId = meetingFormData.calendar && meetingFormData.calendar !== 'default'
+        ? meetingFormData.calendar.replace(/-work$/, '')
+        : undefined;
+
+      // Reminder: convert minutes-string to a number (or omit)
+      const reminderMinutes = meetingFormData.reminder && meetingFormData.reminder !== 'none'
+        ? Number.parseInt(meetingFormData.reminder, 10)
+        : undefined;
+
       const apiMeetingData = {
         title: meetingFormData.title,
         description: meetingFormData.description || '',
@@ -314,8 +324,14 @@ export default function CalendarPage() {
         video_conference_url: meetingFormData.videoLink || undefined,
         meeting_type: mapMeetingType(meetingFormData.meetingType),
         attendees: meetingFormData.attendees ? parseAttendees(meetingFormData.attendees) : [],
+        executive_id: executiveId && /^[0-9a-f-]{36}$/i.test(executiveId) ? executiveId : undefined,
         is_recurring: meetingFormData.isRecurring || false,
         recurrence_rule: meetingFormData.isRecurring ? mapRecurrenceRule(meetingFormData.recurrencePattern) : undefined,
+        reminder_minutes: reminderMinutes,
+        metadata: {
+          meeting_subtype: meetingFormData.meetingType,
+          source: 'new-meeting-slideout',
+        },
       };
 
       const response = await fetch('/api/meetings', {

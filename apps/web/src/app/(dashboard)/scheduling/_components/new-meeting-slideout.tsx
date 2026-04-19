@@ -266,13 +266,8 @@ export function NewMeetingSlideout({ isOpen, onOpenChange, onSubmit }: NewMeetin
                 name="videoLink"
                 size="sm"
                 icon={VideoRecorder}
-                placeholder="Add Zoom, Teams, or Meet link"
+                placeholder="Paste Zoom, Teams, or Meet link"
               />
-              <div className="flex gap-2 mt-1">
-                <Button type="button" size="sm" color="tertiary">Add Zoom</Button>
-                <Button type="button" size="sm" color="tertiary">Add Teams</Button>
-                <Button type="button" size="sm" color="tertiary">Add Meet</Button>
-              </div>
             </div>
 
             {/* Attendees (Multi-input) */}

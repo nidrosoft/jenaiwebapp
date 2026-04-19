@@ -29,7 +29,10 @@ import { BadgeWithDot } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { InputBase } from "@/components/base/input/input";
+import { useRouter } from "next/navigation";
 import { useMeetingLog, type MeetingLogEntry } from "@/hooks/useDashboard";
+import { notify } from "@/lib/notifications";
+import { ConfirmDeleteDialog } from "@/components/application/confirm-delete-dialog";
 
 // Display meeting type derived from API data
 interface DisplayMeeting {
@@ -140,10 +143,17 @@ const mapMeetingToDisplay = (meeting: MeetingLogEntry): DisplayMeeting => {
 };
 
 export default function MeetingLogPage() {
+  const router = useRouter();
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>();
   const [activeTab, setActiveTab] = useState<"upcoming" | "pending" | "past" | "cancelled" | "all">("upcoming");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [deleteMeetingId, setDeleteMeetingId] = useState<string | null>(null);
+  const [deleteMeetingTitle, setDeleteMeetingTitle] = useState("");
+  const [isDeletingMeeting, setIsDeletingMeeting] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
 
   // Debounce search query
   useEffect(() => {
@@ -200,10 +210,51 @@ export default function MeetingLogPage() {
     if (!isLoading) fetchTabCounts();
   }, [apiMeetings.length, isLoading, fetchTabCounts]);
 
-  // Transform API meetings to display format
+  // Transform API meetings to display format, with optional type/location filters
   const displayMeetings = useMemo(() => {
-    return apiMeetings.map(mapMeetingToDisplay);
-  }, [apiMeetings]);
+    return apiMeetings
+      .map(mapMeetingToDisplay)
+      .filter((m) => typeFilter === "all" ? true : m.type === typeFilter)
+      .filter((m) => locationFilter === "all" ? true : m.locationType === locationFilter);
+  }, [apiMeetings, typeFilter, locationFilter]);
+
+  // Row actions
+  const handleViewMeeting = useCallback((id: string) => {
+    router.push(`/scheduling/calendar?meeting=${id}`);
+  }, [router]);
+
+  const handleEditMeeting = useCallback((id: string) => {
+    router.push(`/scheduling/calendar?meeting=${id}&edit=1`);
+  }, [router]);
+
+  const promptDeleteMeeting = useCallback((id: string, title: string) => {
+    setDeleteMeetingId(id);
+    setDeleteMeetingTitle(title);
+  }, []);
+
+  const confirmDeleteMeeting = useCallback(async () => {
+    if (!deleteMeetingId) return;
+    setIsDeletingMeeting(true);
+    try {
+      const res = await fetch(`/api/meetings/${deleteMeetingId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        notify.error("Failed to delete meeting", err.error?.message || "Please try again.");
+        return;
+      }
+      notify.success("Meeting deleted", "The meeting has been removed from your calendar.");
+      refetch();
+      fetchTabCounts();
+    } catch {
+      notify.error("Failed to delete meeting", "An unexpected error occurred.");
+    } finally {
+      setIsDeletingMeeting(false);
+      setDeleteMeetingId(null);
+      setDeleteMeetingTitle("");
+    }
+  }, [deleteMeetingId, refetch, fetchTabCounts]);
+
+  const activeFilterCount = (typeFilter !== "all" ? 1 : 0) + (locationFilter !== "all" ? 1 : 0);
 
   // Sort meetings
   const sortedMeetings = useMemo(() => {
@@ -242,9 +293,49 @@ export default function MeetingLogPage() {
           <Button size="md" color="secondary" iconLeading={RefreshCw01} onClick={() => refetch()} disabled={isLoading}>
             {isLoading ? "Loading..." : "Refresh"}
           </Button>
-          <Button size="md" color="secondary" iconLeading={FilterLines}>
-            Filters
-          </Button>
+          <div className="relative">
+            <Button size="md" color="secondary" iconLeading={FilterLines} onClick={() => setShowFilters(!showFilters)}>
+              {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : "Filters"}
+            </Button>
+            {showFilters && (
+              <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900">
+                <div className="mb-3">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Type</label>
+                  <select
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="internal">Internal</option>
+                    <option value="external">External</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Location</label>
+                  <select
+                    value={locationFilter}
+                    onChange={(e) => setLocationFilter(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                  >
+                    <option value="all">All Locations</option>
+                    <option value="video">Video</option>
+                    <option value="in-person">In-Person</option>
+                    <option value="phone">Phone</option>
+                  </select>
+                </div>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => { setTypeFilter("all"); setLocationFilter("all"); }}
+                    className="w-full rounded-lg border border-gray-200 py-1.5 text-center text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -372,9 +463,9 @@ export default function MeetingLogPage() {
                   </Table.Cell>
                   <Table.Cell className="pr-4 pl-4">
                     <div className="flex justify-end gap-0.5 max-lg:hidden">
-                      <ButtonUtility size="xs" color="tertiary" tooltip="View" icon={Eye} />
-                      <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} />
-                      <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} />
+                      <ButtonUtility size="xs" color="tertiary" tooltip="View" icon={Eye} onClick={() => handleViewMeeting(meeting.id)} />
+                      <ButtonUtility size="xs" color="tertiary" tooltip="Edit" icon={Edit01} onClick={() => handleEditMeeting(meeting.id)} />
+                      <ButtonUtility size="xs" color="tertiary" tooltip="Delete" icon={Trash01} onClick={() => promptDeleteMeeting(meeting.id, meeting.title)} />
                     </div>
                     <div className="flex items-center justify-end lg:hidden">
                       <TableRowActionsDropdown />
@@ -403,6 +494,16 @@ export default function MeetingLogPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Meeting Confirmation */}
+      <ConfirmDeleteDialog
+        isOpen={!!deleteMeetingId}
+        onClose={() => { setDeleteMeetingId(null); setDeleteMeetingTitle(""); }}
+        onConfirm={confirmDeleteMeeting}
+        title="Delete Meeting"
+        itemName={deleteMeetingTitle}
+        isLoading={isDeletingMeeting}
+      />
 
       {/* Empty State */}
       {!isLoading && sortedMeetings.length === 0 && !error && (

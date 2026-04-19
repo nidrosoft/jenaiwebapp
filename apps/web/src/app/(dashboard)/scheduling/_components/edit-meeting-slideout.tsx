@@ -212,8 +212,8 @@ export function EditMeetingSlideout({
         {/* Header */}
         <div className="relative w-full border-b border-secondary px-4 py-4 md:px-6">
           <CloseButton className="absolute top-4 right-4" onClick={() => onOpenChange(false)} />
-          <h2 className="text-lg font-semibold text-primary">Edit Meeting</h2>
-          <p className="text-sm text-tertiary">Update meeting details or delete</p>
+          <h2 className="text-lg font-semibold text-primary">Event Details</h2>
+          <p className="text-sm text-tertiary">Review, edit, or cancel this event</p>
         </div>
 
         {/* Content */}
@@ -224,9 +224,9 @@ export function EditMeetingSlideout({
                 <Trash01 className="h-6 w-6 text-error-600 dark:text-error-400" />
               </div>
               <div className="text-center">
-                <h3 className="text-lg font-semibold text-primary">Delete Meeting?</h3>
+                <h3 className="text-lg font-semibold text-primary">Cancel this event?</h3>
                 <p className="mt-1 text-sm text-tertiary">
-                  Are you sure you want to delete "{meeting.title}"? This action cannot be undone.
+                  Are you sure you want to cancel "{meeting.title}"? It will be removed from your calendar (including connected Outlook / Google calendars) and cannot be recovered.
                 </p>
               </div>
               <div className="flex gap-3 mt-4">
@@ -244,7 +244,7 @@ export function EditMeetingSlideout({
                   onClick={handleDelete}
                   disabled={isDeleting}
                 >
-                  {isDeleting ? "Deleting..." : "Delete Meeting"}
+                  {isDeleting ? "Cancelling..." : "Cancel Event"}
                 </Button>
               </div>
             </div>
@@ -444,11 +444,11 @@ export function EditMeetingSlideout({
               iconLeading={Trash01}
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Delete
+              Cancel Event
             </Button>
             <div className="flex gap-3">
               <Button size="md" color="secondary" onClick={() => onOpenChange(false)}>
-                Cancel
+                Close
               </Button>
               <Button 
                 type="submit" 

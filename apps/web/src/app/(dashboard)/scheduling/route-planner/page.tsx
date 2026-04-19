@@ -46,6 +46,7 @@ import {
   downloadICSFile,
   type CalendarEventData 
 } from "@/lib/calendar-links";
+import { notify } from "@/lib/notifications";
 
 // Meeting location type for display
 interface MeetingLocation {
@@ -293,9 +294,76 @@ export default function RoutePlannerPage() {
     year: "numeric",
   });
 
-  const handleAddStop = (stopData: StopFormData) => {
-    console.log("Adding stop:", stopData);
-    refetch();
+  // Parse "9:00 AM" + selectedDate into a Date. Returns null if unparseable.
+  const parseClockToDate = (dateStr: string, timeStr: string): Date | null => {
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(timeStr.trim());
+    if (!m) return null;
+    let hours = Number(m[1]);
+    const minutes = Number(m[2]);
+    const period = m[3].toUpperCase();
+    if (period === "PM" && hours !== 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+    const [year, month, day] = dateStr.split("-").map(Number);
+    return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  };
+
+  // Parse "30 min" / "1 hr" / "1.5 hr" to minutes.
+  const parseDurationToMinutes = (s: string): number => {
+    const trimmed = s.trim();
+    if (trimmed.endsWith("min")) return Number(trimmed.replace(/\s*min$/, "")) || 30;
+    if (trimmed.endsWith("hr")) return Math.round(Number(trimmed.replace(/\s*hr$/, "")) * 60) || 60;
+    return 60;
+  };
+
+  const handleAddStop = async (stopData: StopFormData) => {
+    try {
+      const start = parseClockToDate(selectedDate, stopData.time);
+      if (!start) {
+        notify.error("Invalid time", `Could not parse "${stopData.time}".`);
+        return;
+      }
+      const minutes = parseDurationToMinutes(stopData.duration);
+      const end = new Date(start.getTime() + minutes * 60_000);
+
+      // Map the stop's "type" to the meeting_type enum
+      const typeToMeetingType: Record<string, 'client' | 'other' | 'internal'> = {
+        client: 'client',
+        personal: 'other',
+        internal: 'internal',
+      };
+
+      const res = await fetch("/api/meetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: stopData.title,
+          description: stopData.notes || "",
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          is_all_day: false,
+          location_type: "in_person",
+          location: stopData.address,
+          meeting_type: typeToMeetingType[stopData.type] || "other",
+          attendees: [],
+          is_recurring: false,
+          metadata: { source: "route-planner-add-stop" },
+        }),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        notify.error("Failed to add stop", err.error?.message || "Please try again.");
+        return;
+      }
+
+      notify.success("Stop added", `"${stopData.title}" has been added to your route.`);
+      refetch();
+    } catch (err) {
+      console.error("Failed to add stop:", err);
+      notify.error("Failed to add stop", "An unexpected error occurred.");
+    }
   };
 
   const moveMeeting = (index: number, direction: "up" | "down") => {
@@ -351,7 +419,7 @@ export default function RoutePlannerPage() {
     ].join('\n');
     
     navigator.clipboard.writeText(routeText);
-    alert('Route copied to clipboard!');
+    notify.success('Copied', 'Route copied to clipboard.');
   }, [displayDate, departureTime, startLocation, displayMeetings, totalDuration, totalDistance]);
 
   // Generate calendar event data for "block travel time" events
@@ -404,7 +472,7 @@ export default function RoutePlannerPage() {
   const addToGoogleCalendar = useCallback(() => {
     const events = generateTravelBlockEvents();
     if (events.length === 0) {
-      alert('No travel events to add');
+      notify.error('No events', 'No travel events to add.');
       return;
     }
     // Open first event, user can add others manually or we open multiple tabs
@@ -420,7 +488,7 @@ export default function RoutePlannerPage() {
   const addToOutlookCalendar = useCallback(() => {
     const events = generateTravelBlockEvents();
     if (events.length === 0) {
-      alert('No travel events to add');
+      notify.error('No events', 'No travel events to add.');
       return;
     }
     events.forEach((event, index) => {
@@ -435,7 +503,7 @@ export default function RoutePlannerPage() {
   const downloadCalendarFile = useCallback(() => {
     const events = generateTravelBlockEvents();
     if (events.length === 0) {
-      alert('No travel events to download');
+      notify.error('No events', 'No travel events to download.');
       return;
     }
     // For ICS, we'll create one file per event or a combined one
@@ -878,7 +946,19 @@ export default function RoutePlannerPage() {
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">
-            <Button size="sm" color="secondary" iconLeading={NavigationPointer01}>
+            <Button
+              size="sm"
+              color="secondary"
+              iconLeading={NavigationPointer01}
+              onClick={() => {
+                if (googleMapsUrl) {
+                  window.open(googleMapsUrl, '_blank');
+                } else {
+                  notify.error('No route', 'Add at least one in-person meeting to get directions.');
+                }
+              }}
+              isDisabled={displayMeetings.length === 0}
+            >
               Get Directions
             </Button>
             <Button size="sm" color="secondary" iconLeading={Building07} onClick={() => setIsAddStopOpen(true)}>

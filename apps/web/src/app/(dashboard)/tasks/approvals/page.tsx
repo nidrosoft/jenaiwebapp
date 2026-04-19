@@ -15,7 +15,6 @@ import {
   CreditCard01,
   File06,
   HelpCircle,
-  MessageSquare01,
   Plus,
   Users01,
   XClose,
@@ -315,10 +314,19 @@ export default function ApprovalsPage() {
                         </BadgeWithDot>
                         <Button
                           size="sm"
-                          color="secondary"
-                          iconLeading={MessageSquare01}
+                          color="primary"
+                          iconLeading={Check}
+                          onClick={() => handleApprove(approval.id)}
                         >
-                          View Response
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          color="primary-destructive"
+                          iconLeading={XClose}
+                          onClick={() => handleReject(approval.id)}
+                        >
+                          Reject
                         </Button>
                       </>
                     ) : (

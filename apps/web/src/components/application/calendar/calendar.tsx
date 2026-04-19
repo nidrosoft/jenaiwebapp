@@ -184,6 +184,7 @@ interface MonthViewProps {
     fullDateFormatter: DateFormatter;
     shortWeekdayFormatter: DateFormatter;
     timeFormatter: DateFormatter;
+    onEventClick?: (event: ZonedEvent) => void;
     className?: string;
 }
 
@@ -197,6 +198,7 @@ const MonthView = ({
     fullDateFormatter,
     shortWeekdayFormatter,
     timeFormatter, // Needed for formatTime inside
+    onEventClick,
     className,
 }: MonthViewProps) => {
     const monthStart = startOfMonth(currentMonthDate);
@@ -501,7 +503,15 @@ const MonthView = ({
                                             : undefined;
 
                                     return (
-                                        <div key={event.id} style={spanStyle} className={cx(!isCurrentMonthFlag && "opacity-60")}>
+                                        <div
+                                            key={event.id}
+                                            style={spanStyle}
+                                            className={cx(!isCurrentMonthFlag && "opacity-60", "cursor-pointer")}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onEventClick) onEventClick(event);
+                                            }}
+                                        >
                                             <CalendarMonthViewEvent
                                                 label={event.title}
                                                 collapseOnMobile={true}
@@ -537,13 +547,21 @@ const MonthView = ({
                                 const supportingText = isAllDay ? "All day" : formatTimeForMonth(event.start);
 
                                 return (
-                                    <CalendarMonthViewEvent
+                                    <div
                                         key={`footer-${event.id}`}
-                                        label={event.title}
-                                        supportingText={supportingText}
-                                        color={event.color}
-                                        withDot={event.dot}
-                                    />
+                                        className="cursor-pointer"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onEventClick) onEventClick(event);
+                                        }}
+                                    >
+                                        <CalendarMonthViewEvent
+                                            label={event.title}
+                                            supportingText={supportingText}
+                                            color={event.color}
+                                            withDot={event.dot}
+                                        />
+                                    </div>
                                 );
                             })}
                         </div>
@@ -1146,6 +1164,7 @@ export const Calendar = ({ events, view: defaultView = "month", className, onEve
                         fullDateFormatter={fullDateFormatter}
                         shortWeekdayFormatter={shortWeekdayFormatter}
                         timeFormatter={timeFormatter}
+                        onEventClick={handleZonedEventClick}
                     />
                 )}
                 {view === "week" && (
