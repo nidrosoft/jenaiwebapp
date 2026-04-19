@@ -33,6 +33,8 @@ export const createMeetingSchema = z.object({
   executive_id: z.string().uuid().optional(),
   is_recurring: z.boolean().default(false),
   recurrence_rule: z.string().optional(),
+  reminder_minutes: z.number().int().min(0).max(40320).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const updateMeetingSchema = z.object({

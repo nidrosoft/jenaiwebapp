@@ -118,6 +118,12 @@ async function handlePost(request: NextRequest, context: AuthContext) {
   try {
     const supabase = await createClient();
 
+    // Merge reminder_minutes and user-supplied metadata into the metadata JSONB
+    const mergedMetadata: Record<string, unknown> = { ...(body.metadata ?? {}) };
+    if (typeof body.reminder_minutes === 'number') {
+      mergedMetadata.reminder_minutes = body.reminder_minutes;
+    }
+
     const meetingData = {
       org_id: context.user.org_id,
       title: body.title,
@@ -137,6 +143,7 @@ async function handlePost(request: NextRequest, context: AuthContext) {
       executive_id: body.executive_id,
       is_recurring: body.is_recurring,
       recurrence_rule: body.recurrence_rule,
+      metadata: Object.keys(mergedMetadata).length > 0 ? mergedMetadata : null,
       created_by: context.user.id,
     };
 

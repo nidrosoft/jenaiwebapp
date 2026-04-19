@@ -16,6 +16,10 @@ import {
 import { updateMeetingSchema } from '@/lib/api/schemas';
 import { createClient } from '@/lib/supabase/server';
 import { eventBus } from '@jeniferai/core-event-bus';
+import {
+  updateMeetingOnExternalCalendar,
+  deleteMeetingFromExternalCalendars,
+} from '@/lib/calendar-sync';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -110,6 +114,13 @@ async function handlePatch(
       },
     });
 
+    // Sync update to external calendar (fire-and-forget)
+    void updateMeetingOnExternalCalendar(data, context.user.id, context.user.org_id)
+      .then((results) => {
+        if (results.length > 0) console.log('[calendar-sync] update results:', results);
+      })
+      .catch((err) => console.error('[calendar-sync] update error:', err));
+
     return successResponse({ data });
   } catch (error) {
     console.error('Unexpected error:', error);
@@ -126,6 +137,15 @@ async function handleDelete(
 
   try {
     const supabase = await createClient();
+
+    // Fetch external-event info before soft-delete so we can remove it from
+    // the user's connected calendar.
+    const { data: existing } = await supabase
+      .from('meetings')
+      .select('external_event_id, external_calendar_provider')
+      .eq('id', id)
+      .eq('org_id', context.user.org_id)
+      .single();
 
     // Soft delete
     const { error } = await supabase
@@ -151,6 +171,20 @@ async function handleDelete(
         correlationId: id,
       },
     });
+
+    // Remove the event from the external calendar (fire-and-forget)
+    if (existing?.external_event_id && existing?.external_calendar_provider) {
+      void deleteMeetingFromExternalCalendars(
+        existing.external_event_id,
+        existing.external_calendar_provider,
+        context.user.id,
+        context.user.org_id,
+      )
+        .then((results) => {
+          if (results.length > 0) console.log('[calendar-sync] delete results:', results);
+        })
+        .catch((err) => console.error('[calendar-sync] delete error:', err));
+    }
 
     return successResponse({ success: true });
   } catch (error) {

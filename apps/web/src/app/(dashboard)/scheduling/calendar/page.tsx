@@ -24,6 +24,7 @@ import {
   Clock,
   Plane,
   BarChartSquare01,
+  RefreshCcw01,
 } from "@untitledui/icons";
 import { Calendar, type CalendarEvent } from "@/components/application/calendar/calendar";
 import { Button } from "@/components/base/buttons/button";
@@ -97,9 +98,44 @@ export default function CalendarPage() {
   const [isShareAvailabilityOpen, setIsShareAvailabilityOpen] = useState(false);
   const [isPollOpen, setIsPollOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingData | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Fetch meetings from database
   const { meetings, stats, isLoading, refetch } = useCalendarMeetings();
+
+  // Sync all local-only meetings to the user's connected external calendars
+  const handleSyncNow = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/api/meetings/sync?all=1', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        notify.error('Sync failed', errorData.error?.message || 'Please try again.');
+        return;
+      }
+      const result = await response.json();
+      const d = result.data ?? result;
+      if (d.processed === 0) {
+        notify.success('Everything in sync', 'All meetings are already on your calendar.');
+      } else if (d.failed > 0) {
+        notify.error(
+          `Synced ${d.synced} of ${d.processed}`,
+          `${d.failed} meetings failed to sync. Check integrations settings.`,
+        );
+      } else {
+        notify.success('Calendar synced', `${d.synced} meeting(s) pushed to your calendar.`);
+      }
+      refetch();
+    } catch (err) {
+      console.error('Sync failed:', err);
+      notify.error('Sync failed', 'An unexpected error occurred.');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [refetch]);
 
   // Handle event click to open edit slideout
   const handleEventClick = useCallback((event: CalendarEvent) => {
@@ -233,8 +269,27 @@ export default function CalendarPage() {
       'weekly': 'FREQ=WEEKLY',
       'biweekly': 'FREQ=WEEKLY;INTERVAL=2',
       'monthly': 'FREQ=MONTHLY',
+      'yearly': 'FREQ=YEARLY',
     };
     return ruleMap[pattern || ''] || undefined;
+  };
+
+  // Map the slideout's wider eventType list to our stricter meeting_type enum.
+  // Unknown UI values fall back to 'other' but we preserve the original selection
+  // in metadata.event_subtype for future display.
+  const mapEventTypeToMeetingType = (eventType?: string):
+    'internal' | 'external' | 'one_on_one' | 'team' | 'client' | 'interview' | 'other' => {
+    switch (eventType) {
+      case 'team': return 'team';
+      case 'conference':
+      case 'workshop':
+      case 'deadline':
+      case 'holiday':
+      case 'ooo':
+      case 'personal':
+      case 'other':
+      default: return 'other';
+    }
   };
 
   const handleCreateMeeting = async (meetingFormData: MeetingFormData) => {
@@ -294,6 +349,16 @@ export default function CalendarPage() {
       const startDateTime = new Date(`${startDateStr}T${startTimeStr}:00`);
       const endDateTime = new Date(`${endDateStr}T${endTimeStr}:00`);
 
+      // Map the UI's "calendar" select (e.g. "{executive_id}-work") to executive_id
+      const executiveId = eventFormData.calendar && eventFormData.calendar !== 'default'
+        ? eventFormData.calendar.replace(/-work$/, '')
+        : undefined;
+
+      // Reminder: convert minutes-string from the UI to a number (or omit if none)
+      const reminderMinutes = eventFormData.reminder && eventFormData.reminder !== 'none'
+        ? Number.parseInt(eventFormData.reminder, 10)
+        : undefined;
+
       const apiEventData = {
         title: eventFormData.title,
         description: eventFormData.description || '',
@@ -303,10 +368,17 @@ export default function CalendarPage() {
         is_all_day: eventFormData.isAllDay || false,
         location_type: eventFormData.location ? 'in_person' as const : 'virtual' as const,
         location: eventFormData.location || undefined,
-        meeting_type: 'other' as const,
+        meeting_type: mapEventTypeToMeetingType(eventFormData.eventType),
         attendees: eventFormData.attendees ? parseAttendees(eventFormData.attendees) : [],
+        executive_id: executiveId && /^[0-9a-f-]{36}$/i.test(executiveId) ? executiveId : undefined,
         is_recurring: eventFormData.isRecurring || false,
         recurrence_rule: eventFormData.isRecurring ? mapRecurrenceRule(eventFormData.recurrencePattern) : undefined,
+        reminder_minutes: reminderMinutes,
+        metadata: {
+          event_subtype: eventFormData.eventType,
+          color: eventFormData.color,
+          source: 'add-event-slideout',
+        },
       };
 
       const response = await fetch('/api/meetings', {
@@ -419,9 +491,20 @@ export default function CalendarPage() {
               </div>
             )}
             
+            {connectedCalendars.length > 0 && (
+              <button
+                onClick={handleSyncNow}
+                disabled={isSyncing}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-medium text-white transition-all hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCcw01 className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing...' : 'Sync Now'}
+              </button>
+            )}
+
             <button 
               onClick={() => router.push('/settings?tab=integrations')}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-white/40 py-2.5 text-sm font-medium text-tertiary transition-all hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 dark:border-gray-700 dark:bg-white/[0.02] dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-400">
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-200 bg-white/40 py-2.5 text-sm font-medium text-tertiary transition-all hover:border-brand-300 hover:bg-brand-50 hover:text-brand-600 dark:border-gray-700 dark:bg-white/[0.02] dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10 dark:hover:text-brand-400">
               <CalendarPlus01 className="h-4 w-4" />
               Connect Calendar
             </button>

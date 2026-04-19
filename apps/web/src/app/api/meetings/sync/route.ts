@@ -1,6 +1,7 @@
 /**
  * Meeting Calendar Sync API Route
- * POST /api/meetings/sync - Sync a meeting to external calendars
+ * POST /api/meetings/sync          - Sync a specific meeting (body: { meeting_id })
+ * POST /api/meetings/sync?all=1    - Sync all unsynced meetings for the current user
  */
 
 import type { NextRequest } from 'next/server';
@@ -11,22 +12,55 @@ import {
   badRequestResponse,
 } from '@/lib/api/utils';
 import { syncMeetingToExternalCalendars } from '@/lib/calendar-sync';
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 
 async function handlePost(request: NextRequest, context: AuthContext) {
   try {
+    const supabase = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+
+    const url = new URL(request.url);
+    const syncAll = url.searchParams.get('all') === '1';
+
+    if (syncAll) {
+      // Bulk sync: push every un-synced future meeting for this org to the
+      // user's connected external calendars.
+      const { data: meetings, error } = await supabase
+        .from('meetings')
+        .select('*')
+        .eq('org_id', context.user.org_id)
+        .is('deleted_at', null)
+        .is('external_event_id', null)
+        .gte('end_time', new Date().toISOString())
+        .order('start_time', { ascending: true })
+        .limit(200);
+
+      if (error) return internalErrorResponse(error.message);
+
+      let synced = 0;
+      let failed = 0;
+      for (const m of meetings || []) {
+        const results = await syncMeetingToExternalCalendars(m, context.user.id, context.user.org_id);
+        synced += results.filter((r) => r.success).length;
+        failed += results.filter((r) => !r.success).length;
+      }
+
+      return successResponse({
+        processed: meetings?.length ?? 0,
+        synced,
+        failed,
+      });
+    }
+
+    // Single meeting sync
     const body = await request.json();
     const { meeting_id } = body;
 
     if (!meeting_id) {
       return badRequestResponse('meeting_id is required');
     }
-
-    // Fetch the meeting using admin client
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
 
     const { data: meeting, error } = await supabase
       .from('meetings')
@@ -42,7 +76,7 @@ async function handlePost(request: NextRequest, context: AuthContext) {
     const results = await syncMeetingToExternalCalendars(
       meeting,
       context.user.id,
-      context.user.org_id
+      context.user.org_id,
     );
 
     return successResponse({

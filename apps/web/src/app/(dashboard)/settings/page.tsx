@@ -931,7 +931,20 @@ function IntegrationsTab() {
       window.history.replaceState({}, '', '/settings?tab=integrations');
     } else if (urlParams.get('error')) {
       const errorMsg = urlParams.get('error');
-      notify.error('Connection failed', `Failed to connect integration: ${errorMsg}`);
+      const provider = urlParams.get('provider');
+      if (errorMsg === 'oauth_not_configured') {
+        const providerName = provider === 'google' ? 'Google'
+          : provider === 'microsoft' ? 'Microsoft'
+          : provider === 'slack' ? 'Slack'
+          : provider === 'zoom' ? 'Zoom'
+          : 'This provider';
+        notify.error(
+          `${providerName} OAuth isn't set up yet`,
+          'An admin needs to add valid OAuth credentials in the server .env. Contact support to enable this integration.',
+        );
+      } else {
+        notify.error('Connection failed', `Failed to connect integration: ${errorMsg}`);
+      }
       window.history.replaceState({}, '', '/settings?tab=integrations');
     }
   }, []);
