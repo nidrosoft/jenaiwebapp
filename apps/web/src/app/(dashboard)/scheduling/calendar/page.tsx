@@ -118,15 +118,25 @@ export default function CalendarPage() {
       }
       const result = await response.json();
       const d = result.data ?? result;
-      if (d.processed === 0) {
-        notify.success('Everything in sync', 'All meetings are already on your calendar.');
-      } else if (d.failed > 0) {
+
+      // Summarise both inbound (import) and outbound (push) counts
+      const parts: string[] = [];
+      if (d.imported > 0) parts.push(`imported ${d.imported} new event${d.imported === 1 ? '' : 's'}`);
+      if (d.updated > 0) parts.push(`updated ${d.updated}`);
+      if (d.synced > 0) parts.push(`pushed ${d.synced}`);
+
+      const hasImportErrors = Array.isArray(d.import_errors) && d.import_errors.length > 0;
+
+      if (parts.length === 0 && !hasImportErrors) {
+        notify.success('Everything in sync', 'Your calendar is already up to date.');
+      } else if (d.failed > 0 || hasImportErrors) {
         notify.error(
-          `Synced ${d.synced} of ${d.processed}`,
-          `${d.failed} meetings failed to sync. Check integrations settings.`,
+          'Sync completed with errors',
+          [parts.join(', '), hasImportErrors ? `Import errors: ${d.import_errors.join('; ')}` : '']
+            .filter(Boolean).join(' — '),
         );
       } else {
-        notify.success('Calendar synced', `${d.synced} meeting(s) pushed to your calendar.`);
+        notify.success('Calendar synced', parts.join(', '));
       }
       refetch();
     } catch (err) {

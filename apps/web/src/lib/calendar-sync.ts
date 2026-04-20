@@ -752,3 +752,450 @@ export async function deleteMeetingFromExternalCalendars(
 
   return results;
 }
+
+// ---------------------------------------------------------------------------
+// INBOUND SYNC: pull events from external calendars into the meetings table.
+// ---------------------------------------------------------------------------
+
+export interface ImportResult {
+  provider: string;
+  success: boolean;
+  imported: number;  // newly inserted
+  updated: number;   // existing rows updated
+  error?: string;
+}
+
+/**
+ * Default window: 30 days before now → 90 days ahead.
+ * Dashboard, route planner, meeting tracker, etc all operate in this window.
+ */
+function getImportWindow(): { startIso: string; endIso: string } {
+  const now = Date.now();
+  const DAY = 86_400_000;
+  return {
+    startIso: new Date(now - 30 * DAY).toISOString(),
+    endIso: new Date(now + 90 * DAY).toISOString(),
+  };
+}
+
+/**
+ * Microsoft Graph event → meetings row.
+ */
+function mapMicrosoftEvent(event: Record<string, unknown>, orgId: string, userId: string): Record<string, unknown> | null {
+  const id = typeof event.id === 'string' ? event.id : null;
+  if (!id) return null;
+
+  const subject = (event.subject as string | undefined) || '(No title)';
+  const body = event.body as { content?: string; contentType?: string } | undefined;
+  const description = body?.content
+    ? (body.contentType === 'html' ? body.content.replace(/<[^>]+>/g, '').trim() : body.content)
+    : null;
+
+  const start = event.start as { dateTime?: string; timeZone?: string } | undefined;
+  const end = event.end as { dateTime?: string; timeZone?: string } | undefined;
+  if (!start?.dateTime || !end?.dateTime) return null;
+
+  // Graph returns naive datetime + timeZone. Treat as UTC when timezone is 'UTC'
+  // (the API respects our `Prefer: outlook.timezone` header — we set it to UTC below).
+  const toIso = (dt: string) => (dt.endsWith('Z') ? dt : `${dt}Z`);
+
+  const location = event.location as { displayName?: string } | undefined;
+  const onlineMeeting = event.onlineMeeting as { joinUrl?: string } | undefined;
+  const isOnlineMeeting = event.isOnlineMeeting === true;
+
+  const attendeesRaw = (event.attendees as Array<{
+    emailAddress?: { address?: string; name?: string };
+    type?: string;
+  }>) || [];
+  const attendees = attendeesRaw
+    .filter((a) => a.emailAddress?.address)
+    .map((a) => ({
+      email: a.emailAddress!.address as string,
+      name: a.emailAddress!.name,
+      is_optional: a.type === 'optional',
+    }));
+
+  // Map Graph's showAs → our status
+  const showAs = event.showAs as string | undefined;
+  const isCancelled = event.isCancelled === true;
+  const status = isCancelled ? 'cancelled'
+    : showAs === 'tentative' ? 'tentative'
+    : 'scheduled';
+
+  return {
+    org_id: orgId,
+    created_by: userId,
+    title: subject,
+    description,
+    start_time: toIso(start.dateTime),
+    end_time: toIso(end.dateTime),
+    timezone: start.timeZone || 'UTC',
+    is_all_day: event.isAllDay === true,
+    location_type: isOnlineMeeting || onlineMeeting?.joinUrl ? 'virtual' : (location?.displayName ? 'in_person' : 'virtual'),
+    location: location?.displayName || null,
+    video_conference_url: onlineMeeting?.joinUrl || null,
+    meeting_type: 'other',
+    attendees,
+    is_recurring: event.recurrence != null,
+    status,
+    external_event_id: id,
+    external_calendar_provider: 'microsoft',
+    external_calendar_id: 'primary',
+    last_synced_at: new Date().toISOString(),
+    metadata: {
+      source: 'outlook-import',
+      iCalUId: event.iCalUId ?? null,
+    },
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Pull events from Microsoft Graph's calendarView endpoint (handles recurring
+ * expansion server-side, which /me/events does not) and upsert into meetings.
+ */
+async function fetchMicrosoftCalendarView(
+  accessToken: string,
+  startIso: string,
+  endIso: string,
+): Promise<Record<string, unknown>[]> {
+  const events: Record<string, unknown>[] = [];
+  let url: string | null = `https://graph.microsoft.com/v1.0/me/calendarView`
+    + `?startDateTime=${encodeURIComponent(startIso)}`
+    + `&endDateTime=${encodeURIComponent(endIso)}`
+    + `&$top=100`
+    + `&$orderby=start/dateTime`;
+
+  // Safety cap to avoid runaway pagination.
+  for (let page = 0; page < 20 && url; page++) {
+    const res: Response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        // Ask Graph to return start/end.dateTime in UTC so we can normalize.
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Graph calendarView failed: ${res.status} ${text.slice(0, 300)}`);
+    }
+
+    const json: { value?: Record<string, unknown>[]; '@odata.nextLink'?: string } = await res.json();
+    if (json.value) events.push(...json.value);
+    url = json['@odata.nextLink'] ?? null;
+  }
+
+  return events;
+}
+
+export async function importMicrosoftCalendarEvents(
+  userId: string,
+  orgId: string,
+): Promise<ImportResult> {
+  const supabase = getAdminClient();
+
+  const { data: integration } = await supabase
+    .from('integrations')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
+    .eq('integration_type', 'calendar')
+    .eq('provider', 'microsoft')
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!integration) {
+    return { provider: 'microsoft', success: false, imported: 0, updated: 0, error: 'No active Microsoft integration' };
+  }
+
+  const updateTokenFn = async (newToken: string, expiresAt: string, newRefreshToken?: string) => {
+    const updateData: Record<string, string> = {
+      access_token: newToken,
+      token_expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    };
+    if (newRefreshToken) updateData.refresh_token = newRefreshToken;
+    await supabase.from('integrations').update(updateData).eq('id', integration.id);
+  };
+
+  const accessToken = await getValidAccessToken(
+    {
+      access_token: integration.access_token,
+      refresh_token: integration.refresh_token,
+      token_expires_at: integration.token_expires_at,
+      provider: 'microsoft',
+    },
+    updateTokenFn,
+  );
+
+  if (!accessToken) {
+    const err = 'Failed to obtain valid Microsoft access token';
+    await recordSyncError(supabase, integration.id, err);
+    return { provider: 'microsoft', success: false, imported: 0, updated: 0, error: err };
+  }
+
+  const { startIso, endIso } = getImportWindow();
+  let rawEvents: Record<string, unknown>[];
+  try {
+    rawEvents = await fetchMicrosoftCalendarView(accessToken, startIso, endIso);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await recordSyncError(supabase, integration.id, msg);
+    return { provider: 'microsoft', success: false, imported: 0, updated: 0, error: msg };
+  }
+
+  let imported = 0;
+  let updated = 0;
+
+  for (const raw of rawEvents) {
+    const row = mapMicrosoftEvent(raw, orgId, userId);
+    if (!row) continue;
+
+    // Check if this external event already exists to distinguish insert vs update
+    const { data: existing } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('external_calendar_provider', 'microsoft')
+      .eq('external_event_id', row.external_event_id as string)
+      .maybeSingle();
+
+    if (existing?.id) {
+      // Preserve the original created_by — don't overwrite with the syncing user
+      delete (row as Record<string, unknown>).created_by;
+      const { error } = await supabase
+        .from('meetings')
+        .update(row)
+        .eq('id', existing.id);
+      if (!error) updated++;
+    } else {
+      const { error } = await supabase
+        .from('meetings')
+        .insert({ ...row, created_at: new Date().toISOString() });
+      if (!error) imported++;
+    }
+  }
+
+  await recordSyncError(supabase, integration.id, null);
+
+  return { provider: 'microsoft', success: true, imported, updated };
+}
+
+/**
+ * Google Calendar event → meetings row.
+ */
+function mapGoogleEvent(event: Record<string, unknown>, orgId: string, userId: string): Record<string, unknown> | null {
+  const id = typeof event.id === 'string' ? event.id : null;
+  if (!id) return null;
+
+  const summary = (event.summary as string | undefined) || '(No title)';
+  const description = (event.description as string | undefined) || null;
+
+  const start = event.start as { dateTime?: string; date?: string; timeZone?: string } | undefined;
+  const end = event.end as { dateTime?: string; date?: string; timeZone?: string } | undefined;
+  if (!start || !end) return null;
+
+  const isAllDay = !start.dateTime && !!start.date;
+  const startIso = isAllDay
+    ? new Date(`${start.date}T00:00:00Z`).toISOString()
+    : (start.dateTime as string);
+  const endIso = isAllDay
+    ? new Date(`${end.date}T00:00:00Z`).toISOString()
+    : (end.dateTime as string);
+
+  const location = (event.location as string | undefined) || null;
+  const hangoutLink = (event.hangoutLink as string | undefined) || null;
+  const conferenceData = event.conferenceData as { entryPoints?: Array<{ uri?: string; entryPointType?: string }> } | undefined;
+  const videoEntry = conferenceData?.entryPoints?.find((e) => e.entryPointType === 'video');
+  const videoUrl = hangoutLink || videoEntry?.uri || null;
+
+  const attendeesRaw = (event.attendees as Array<{
+    email?: string;
+    displayName?: string;
+    optional?: boolean;
+  }>) || [];
+  const attendees = attendeesRaw
+    .filter((a) => a.email)
+    .map((a) => ({ email: a.email as string, name: a.displayName, is_optional: a.optional === true }));
+
+  const statusRaw = (event.status as string | undefined) || 'confirmed';
+  const status = statusRaw === 'cancelled' ? 'cancelled'
+    : statusRaw === 'tentative' ? 'tentative'
+    : 'scheduled';
+
+  return {
+    org_id: orgId,
+    created_by: userId,
+    title: summary,
+    description,
+    start_time: startIso,
+    end_time: endIso,
+    timezone: start.timeZone || 'UTC',
+    is_all_day: isAllDay,
+    location_type: videoUrl ? 'virtual' : (location ? 'in_person' : 'virtual'),
+    location,
+    video_conference_url: videoUrl,
+    meeting_type: 'other',
+    attendees,
+    is_recurring: Array.isArray(event.recurrence) && (event.recurrence as unknown[]).length > 0,
+    status,
+    external_event_id: id,
+    external_calendar_provider: 'google',
+    external_calendar_id: 'primary',
+    last_synced_at: new Date().toISOString(),
+    metadata: {
+      source: 'google-import',
+      iCalUID: event.iCalUID ?? null,
+    },
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function fetchGoogleCalendarEvents(
+  accessToken: string,
+  startIso: string,
+  endIso: string,
+): Promise<Record<string, unknown>[]> {
+  const events: Record<string, unknown>[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < 20; page++) {
+    const params = new URLSearchParams({
+      timeMin: startIso,
+      timeMax: endIso,
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '250',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Google events.list failed: ${res.status} ${text.slice(0, 300)}`);
+    }
+
+    const json: { items?: Record<string, unknown>[]; nextPageToken?: string } = await res.json();
+    if (json.items) events.push(...json.items);
+    pageToken = json.nextPageToken;
+    if (!pageToken) break;
+  }
+
+  return events;
+}
+
+export async function importGoogleCalendarEvents(
+  userId: string,
+  orgId: string,
+): Promise<ImportResult> {
+  const supabase = getAdminClient();
+
+  const { data: integration } = await supabase
+    .from('integrations')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('org_id', orgId)
+    .eq('integration_type', 'calendar')
+    .eq('provider', 'google')
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!integration) {
+    return { provider: 'google', success: false, imported: 0, updated: 0, error: 'No active Google integration' };
+  }
+
+  const updateTokenFn = async (newToken: string, expiresAt: string, newRefreshToken?: string) => {
+    const updateData: Record<string, string> = {
+      access_token: newToken,
+      token_expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    };
+    if (newRefreshToken) updateData.refresh_token = newRefreshToken;
+    await supabase.from('integrations').update(updateData).eq('id', integration.id);
+  };
+
+  const accessToken = await getValidAccessToken(
+    {
+      access_token: integration.access_token,
+      refresh_token: integration.refresh_token,
+      token_expires_at: integration.token_expires_at,
+      provider: 'google',
+    },
+    updateTokenFn,
+  );
+
+  if (!accessToken) {
+    const err = 'Failed to obtain valid Google access token';
+    await recordSyncError(supabase, integration.id, err);
+    return { provider: 'google', success: false, imported: 0, updated: 0, error: err };
+  }
+
+  const { startIso, endIso } = getImportWindow();
+  let rawEvents: Record<string, unknown>[];
+  try {
+    rawEvents = await fetchGoogleCalendarEvents(accessToken, startIso, endIso);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await recordSyncError(supabase, integration.id, msg);
+    return { provider: 'google', success: false, imported: 0, updated: 0, error: msg };
+  }
+
+  let imported = 0;
+  let updated = 0;
+
+  for (const raw of rawEvents) {
+    const row = mapGoogleEvent(raw, orgId, userId);
+    if (!row) continue;
+
+    const { data: existing } = await supabase
+      .from('meetings')
+      .select('id')
+      .eq('org_id', orgId)
+      .eq('external_calendar_provider', 'google')
+      .eq('external_event_id', row.external_event_id as string)
+      .maybeSingle();
+
+    if (existing?.id) {
+      delete (row as Record<string, unknown>).created_by;
+      const { error } = await supabase
+        .from('meetings')
+        .update(row)
+        .eq('id', existing.id);
+      if (!error) updated++;
+    } else {
+      const { error } = await supabase
+        .from('meetings')
+        .insert({ ...row, created_at: new Date().toISOString() });
+      if (!error) imported++;
+    }
+  }
+
+  await recordSyncError(supabase, integration.id, null);
+  return { provider: 'google', success: true, imported, updated };
+}
+
+/**
+ * Import events from every active calendar integration the user has.
+ */
+export async function importAllExternalCalendarEvents(
+  userId: string,
+  orgId: string,
+): Promise<ImportResult[]> {
+  const supabase = getAdminClient();
+  const integrations = await getActiveCalendarIntegrations(supabase, userId, orgId);
+
+  const results: ImportResult[] = [];
+  for (const integration of integrations) {
+    if (integration.provider === 'microsoft') {
+      results.push(await importMicrosoftCalendarEvents(userId, orgId));
+    } else if (integration.provider === 'google') {
+      results.push(await importGoogleCalendarEvents(userId, orgId));
+    }
+  }
+  return results;
+}

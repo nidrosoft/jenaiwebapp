@@ -11,7 +11,10 @@ import {
   internalErrorResponse,
   badRequestResponse,
 } from '@/lib/api/utils';
-import { syncMeetingToExternalCalendars } from '@/lib/calendar-sync';
+import {
+  syncMeetingToExternalCalendars,
+  importAllExternalCalendarEvents,
+} from '@/lib/calendar-sync';
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js';
 
 async function handlePost(request: NextRequest, context: AuthContext) {
@@ -23,34 +26,62 @@ async function handlePost(request: NextRequest, context: AuthContext) {
 
     const url = new URL(request.url);
     const syncAll = url.searchParams.get('all') === '1';
+    const direction = url.searchParams.get('direction'); // 'pull' | 'push' | undefined (both)
 
     if (syncAll) {
-      // Bulk sync: push every un-synced future meeting for this org to the
-      // user's connected external calendars.
-      const { data: meetings, error } = await supabase
-        .from('meetings')
-        .select('*')
-        .eq('org_id', context.user.org_id)
-        .is('deleted_at', null)
-        .is('external_event_id', null)
-        .gte('end_time', new Date().toISOString())
-        .order('start_time', { ascending: true })
-        .limit(200);
+      // Bidirectional sync:
+      // 1. PULL: import events from Outlook/Google into our meetings table
+      //    (so dashboard, calendar, route planner, etc. can see them).
+      // 2. PUSH: upload any JenAI-only meetings to the user's external calendars.
 
-      if (error) return internalErrorResponse(error.message);
+      let imported = 0;
+      let updated = 0;
+      const importErrors: string[] = [];
+
+      if (direction !== 'push') {
+        const importResults = await importAllExternalCalendarEvents(
+          context.user.id,
+          context.user.org_id,
+        );
+        for (const r of importResults) {
+          imported += r.imported;
+          updated += r.updated;
+          if (!r.success && r.error) importErrors.push(`${r.provider}: ${r.error}`);
+        }
+      }
 
       let synced = 0;
       let failed = 0;
-      for (const m of meetings || []) {
-        const results = await syncMeetingToExternalCalendars(m, context.user.id, context.user.org_id);
-        synced += results.filter((r) => r.success).length;
-        failed += results.filter((r) => !r.success).length;
+      let processed = 0;
+
+      if (direction !== 'pull') {
+        const { data: meetings, error } = await supabase
+          .from('meetings')
+          .select('*')
+          .eq('org_id', context.user.org_id)
+          .is('deleted_at', null)
+          .is('external_event_id', null)
+          .gte('end_time', new Date().toISOString())
+          .order('start_time', { ascending: true })
+          .limit(200);
+
+        if (error) return internalErrorResponse(error.message);
+
+        processed = meetings?.length ?? 0;
+        for (const m of meetings || []) {
+          const results = await syncMeetingToExternalCalendars(m, context.user.id, context.user.org_id);
+          synced += results.filter((r) => r.success).length;
+          failed += results.filter((r) => !r.success).length;
+        }
       }
 
       return successResponse({
-        processed: meetings?.length ?? 0,
+        imported,
+        updated,
+        processed,
         synced,
         failed,
+        import_errors: importErrors,
       });
     }
 

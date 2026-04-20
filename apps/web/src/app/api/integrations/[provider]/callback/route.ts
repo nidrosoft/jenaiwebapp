@@ -5,6 +5,10 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import {
+  importMicrosoftCalendarEvents,
+  importGoogleCalendarEvents,
+} from '@/lib/calendar-sync';
 
 interface RouteParams {
   params: Promise<{ provider: string }>;
@@ -164,6 +168,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.redirect(
         `${process.env.NEXT_PUBLIC_APP_URL}/settings?tab=integrations&error=save_failed`
       );
+    }
+
+    // Kick off initial calendar import (fire-and-forget). This is what makes
+    // the user's existing Outlook/Google events appear on the dashboard,
+    // calendar view, route planner, meeting tracker, and reports.
+    if (provider === 'microsoft' || provider === 'google') {
+      const runImport = provider === 'microsoft'
+        ? importMicrosoftCalendarEvents(user_id, org_id)
+        : importGoogleCalendarEvents(user_id, org_id);
+      // Don't await — the import can take 5-30s and we don't want to block the
+      // redirect. Errors are already logged+stored in `integrations.last_error`.
+      runImport.catch((err) => {
+        console.error(`[oauth-callback] Initial ${provider} import failed:`, err);
+      });
     }
 
     const separator = redirect_url.includes('?') ? '&' : '?';
