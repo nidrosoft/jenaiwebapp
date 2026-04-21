@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
+      // Password recovery flow — always send user to the reset page,
+      // bypassing onboarding checks. The user has a temporary session
+      // just to update their password.
+      if (next === '/reset-password') {
+        return NextResponse.redirect(new URL('/reset-password', requestUrl.origin));
+      }
+
       // Check if user has completed onboarding
       const { data: { user } } = await supabase.auth.getUser();
       

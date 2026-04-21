@@ -48,8 +48,10 @@ export async function middleware(request: NextRequest) {
 
     const onboardingCompleted = profile?.onboarding_completed ?? false;
 
-    // Logged in trying to access auth pages
-    if (isPublicRoute) {
+    // Logged in trying to access auth pages (except /reset-password, which
+    // is reached via a temporary recovery session after clicking the email link)
+    const isResetPasswordRoute = pathname === '/reset-password' || pathname.startsWith('/reset-password/');
+    if (isPublicRoute && !isResetPasswordRoute) {
       if (!onboardingCompleted) {
         return NextResponse.redirect(new URL('/onboarding', request.url));
       }
