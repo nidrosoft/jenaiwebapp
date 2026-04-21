@@ -7,22 +7,34 @@ import type { NextRequest } from 'next/server';
 import { withAuth, type AuthContext } from '@/lib/api/middleware';
 import { successResponse, internalErrorResponse } from '@/lib/api/utils';
 import { createClient } from '@/lib/supabase/server';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { startOfDay, endOfDay, startOfWeek } from 'date-fns';
 
 async function handleGet(request: NextRequest, context: AuthContext) {
   try {
     const supabase = await createClient();
-    const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0)).toISOString();
-    const todayEnd = new Date(now.setHours(23, 59, 59, 999)).toISOString();
-    const weekStart = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
 
-    // Fetch today's meetings
+    // Compute today's window in the user's timezone, then convert to UTC for DB queries.
+    // This way, "today" matches the user's wall-clock day regardless of where the server runs.
+    const tz = context.user.timezone || 'UTC';
+    const nowInTz = toZonedTime(new Date(), tz);
+    const todayStartUtc = fromZonedTime(startOfDay(nowInTz), tz);
+    const todayEndUtc = fromZonedTime(endOfDay(nowInTz), tz);
+    const weekStartUtc = fromZonedTime(startOfWeek(nowInTz, { weekStartsOn: 0 }), tz);
+
+    const todayStart = todayStartUtc.toISOString();
+    const todayEnd = todayEndUtc.toISOString();
+    const weekStart = weekStartUtc.toISOString();
+
+    // Fetch today's meetings — includes any meeting that OVERLAPS today
+    // (started earlier and still ongoing, or starts later today).
+    // A meeting overlaps today if: start_time <= todayEnd AND end_time >= todayStart.
     const { data: todaysMeetings } = await supabase
       .from('meetings')
       .select('*')
       .eq('org_id', context.user.org_id)
-      .gte('start_time', todayStart)
       .lte('start_time', todayEnd)
+      .gte('end_time', todayStart)
       .is('deleted_at', null)
       .order('start_time', { ascending: true })
       .limit(10);
@@ -59,20 +71,21 @@ async function handleGet(request: NextRequest, context: AuthContext) {
       .order('date', { ascending: true })
       .limit(5);
 
-    // Fetch metrics
+    // Fetch metrics — use overlap filter so multi-day meetings show up correctly.
     const { count: meetingsToday } = await supabase
       .from('meetings')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', context.user.org_id)
-      .gte('start_time', todayStart)
       .lte('start_time', todayEnd)
+      .gte('end_time', todayStart)
       .is('deleted_at', null);
 
+    // "This week" = any meeting overlapping the week (started or ending within it).
     const { count: meetingsThisWeek } = await supabase
       .from('meetings')
       .select('*', { count: 'exact', head: true })
       .eq('org_id', context.user.org_id)
-      .gte('start_time', weekStart)
+      .gte('end_time', weekStart)
       .is('deleted_at', null);
 
     const { count: tasksPending } = await supabase

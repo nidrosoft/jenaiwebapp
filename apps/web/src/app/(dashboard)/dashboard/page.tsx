@@ -370,9 +370,9 @@ export default function DashboardPage() {
         {/* Metrics Cards */}
         <div className="-my-2 flex flex-col gap-4 overflow-x-auto px-4 py-2 md:flex-row md:flex-wrap md:items-start md:gap-5 lg:px-8">
           <MetricsChart04
-            title={String(metrics?.meetings_today || 0)}
+            title={String(metrics?.meetings_today ?? dashboardData?.todays_meetings?.length ?? 0)}
             subtitle="Meetings today"
-            change={metrics?.meetings_this_week ? `${metrics.meetings_this_week} this week` : "0 this week"}
+            change={`${metrics?.meetings_this_week ?? 0} this week`}
             changeTrend="positive"
             changeDescription=""
             className="flex-1 md:min-w-[280px]"
