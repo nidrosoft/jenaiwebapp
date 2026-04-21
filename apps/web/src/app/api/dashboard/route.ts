@@ -117,7 +117,7 @@ async function handleGet(request: NextRequest, context: AuthContext) {
       },
     };
 
-    return successResponse({ data: dashboardData });
+    return successResponse(dashboardData);
   } catch (error) {
     console.error('Unexpected error:', error);
     return internalErrorResponse();
